@@ -11,6 +11,13 @@ test("settings and events screens render", async ({ page }) => {
   await expect(page.getByText("mail.as135559.net.au")).toBeVisible(); // hostname
   await expect(page.getByRole("heading", { name: "Listeners" })).toBeVisible();
 
+  // Message retention: switch to count mode, set a limit, save.
+  await expect(page.getByRole("heading", { name: "Message retention" })).toBeVisible();
+  await page.getByLabel("Keep by count").check();
+  await page.getByLabel("Retention max messages").fill("5000");
+  await page.getByTestId("save-retention").click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+
   await page.getByRole("link", { name: "Events" }).click();
   await expect(page).toHaveURL(/\/events$/);
   await expect(page.getByRole("heading", { name: "Events" })).toBeVisible();

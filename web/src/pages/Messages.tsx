@@ -14,58 +14,93 @@ const statusColor: Record<string, string> = {
   bounced: "text-red-400",
 };
 
+const EMPTY = { status: "", direction: "", from: "", subject: "", rcpt: "", after: "", before: "" };
+type Filters = typeof EMPTY;
+
+const inputCls =
+  "rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary";
+
 export default function Messages() {
-  const [status, setStatus] = useState("");
-  const [direction, setDirection] = useState("");
-  const [rcpt, setRcpt] = useState("");
+  // `draft` is what the user is typing; `active` is what we actually query, so
+  // typing doesn't fire a request per keystroke.
+  const [draft, setDraft] = useState<Filters>(EMPTY);
+  const [active, setActive] = useState<Filters>(EMPTY);
 
   const params: Record<string, string> = {};
-  if (status) params.status = status;
-  if (direction) params.direction = direction;
-  if (rcpt.trim()) params.rcpt = rcpt.trim();
+  if (active.status) params.status = active.status;
+  if (active.direction) params.direction = active.direction;
+  if (active.from.trim()) params.from = active.from.trim();
+  if (active.subject.trim()) params.subject = active.subject.trim();
+  if (active.rcpt.trim()) params.rcpt = active.rcpt.trim();
+  if (active.after) params.after = `${active.after}T00:00:00Z`;
+  if (active.before) params.before = `${active.before}T23:59:59Z`;
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["messages", status, direction, rcpt],
+    queryKey: ["messages", active],
     queryFn: ({ pageParam }) => listMessages(pageParam ? { ...params, cursor: pageParam } : params),
     initialPageParam: "",
     getNextPageParam: (last) => last.next_cursor || undefined,
   });
   const messages = data?.pages.flatMap((p) => p.messages) ?? [];
+  const activeCount = Object.values(active).filter(Boolean).length;
+
+  const set = (patch: Partial<Filters>) => setDraft({ ...draft, ...patch });
+  const search = (e: React.FormEvent) => {
+    e.preventDefault();
+    setActive(draft);
+  };
+  const reset = () => {
+    setDraft(EMPTY);
+    setActive(EMPTY);
+  };
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Messages</h1>
 
-      <div className="flex gap-3">
-        <select
-          aria-label="Filter status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-md border border-border bg-background px-3 py-1.5 text-sm"
-        >
-          <option value="">All statuses</option>
-          {["queued", "delivered", "deferred", "partial", "failed", "bounced"].map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter direction"
-          value={direction}
-          onChange={(e) => setDirection(e.target.value)}
-          className="rounded-md border border-border bg-background px-3 py-1.5 text-sm"
-        >
-          <option value="">Both directions</option>
-          <option value="outbound">Outbound</option>
-          <option value="inbound">Inbound</option>
-        </select>
-        <input
-          aria-label="Search recipient"
-          value={rcpt}
-          onChange={(e) => setRcpt(e.target.value)}
-          placeholder="recipient@example.com"
-          className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary"
-        />
-      </div>
+      {/* Detailed search */}
+      <Card className="p-4">
+        <form onSubmit={search} className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <input aria-label="Search sender" placeholder="From (sender)" value={draft.from}
+              onChange={(e) => set({ from: e.target.value })} className={inputCls} />
+            <input aria-label="Search recipient" placeholder="To (recipient)" value={draft.rcpt}
+              onChange={(e) => set({ rcpt: e.target.value })} className={inputCls} />
+            <input aria-label="Search subject" placeholder="Subject contains…" value={draft.subject}
+              onChange={(e) => set({ subject: e.target.value })} className={inputCls} />
+            <select aria-label="Filter status" value={draft.status}
+              onChange={(e) => set({ status: e.target.value })} className={inputCls}>
+              <option value="">All statuses</option>
+              {["queued", "delivered", "deferred", "partial", "failed", "bounced"].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select aria-label="Filter direction" value={draft.direction}
+              onChange={(e) => set({ direction: e.target.value })} className={inputCls}>
+              <option value="">Both directions</option>
+              <option value="outbound">Outbound</option>
+              <option value="inbound">Inbound</option>
+            </select>
+            <div className="flex items-center gap-2">
+              <input type="date" aria-label="From date" value={draft.after}
+                onChange={(e) => set({ after: e.target.value })} className={cn(inputCls, "flex-1")} />
+              <span className="text-muted-foreground">→</span>
+              <input type="date" aria-label="To date" value={draft.before}
+                onChange={(e) => set({ before: e.target.value })} className={cn(inputCls, "flex-1")} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="submit" data-testid="search-messages">Search</Button>
+            {activeCount > 0 && (
+              <Button type="button" variant="ghost" onClick={reset}>Reset</Button>
+            )}
+            <span className="ml-auto text-xs text-muted-foreground">
+              {messages.length}{hasNextPage ? "+" : ""} result{messages.length === 1 ? "" : "s"}
+              {activeCount > 0 ? ` · ${activeCount} filter${activeCount === 1 ? "" : "s"}` : ""}
+            </span>
+          </div>
+        </form>
+      </Card>
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
       {!isLoading && messages.length === 0 && (

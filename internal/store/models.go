@@ -36,6 +36,12 @@ type ApiToken struct {
 	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
 }
 
+type AppSetting struct {
+	Key       string             `json:"key"`
+	Value     []byte             `json:"value"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type BounceEvent struct {
 	ID        uuid.UUID          `json:"id"`
 	MessageID *uuid.UUID         `json:"message_id"`

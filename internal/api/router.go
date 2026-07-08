@@ -43,6 +43,11 @@ type Server struct {
 	// separate listener (bound in main) and must NOT be exposed on the public
 	// mux. When empty, /metrics is mounted on the public mux behind admin auth.
 	MetricsAddr string
+
+	// Retention defaults from static config, reported by the settings endpoint
+	// when no runtime policy has been saved.
+	RetentionDefaultDays    int
+	RetentionDefaultEnabled bool
 }
 
 // MetricsHandler is the Prometheus handler, exported so main can mount it on a
@@ -126,6 +131,8 @@ func (s *Server) Router() http.Handler {
 			// Events + settings.
 			r.Get("/events", s.handleListEvents)
 			r.Get("/server/info", s.handleServerInfo)
+			r.Get("/settings/retention", s.handleGetRetention)
+			r.Put("/settings/retention", s.handleSetRetention)
 		})
 	})
 

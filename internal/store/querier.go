@@ -41,6 +41,7 @@ type Querier interface {
 	DeleteDomain(ctx context.Context, id uuid.UUID) error
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteMailbox(ctx context.Context, id uuid.UUID) error
+	DeleteMessagesByIDs(ctx context.Context, ids []uuid.UUID) (int64, error)
 	DeleteOldEvents(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
 	// Prune message metadata past the retention window. FK cascades remove the
 	// associated delivery_jobs/attempts/bounce_events; stats rollups are separate.
@@ -72,6 +73,7 @@ type Querier interface {
 	GetMailbox(ctx context.Context, id uuid.UUID) (Mailbox, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
+	GetSetting(ctx context.Context, key string) ([]byte, error)
 	GetWebhookDelivery(ctx context.Context, id uuid.UUID) (WebhookDelivery, error)
 	GrantCredentialDomain(ctx context.Context, arg GrantCredentialDomainParams) error
 	InsertBounceEvent(ctx context.Context, arg InsertBounceEventParams) (BounceEvent, error)
@@ -101,6 +103,10 @@ type Querier interface {
 	MarkWebhookRetry(ctx context.Context, arg MarkWebhookRetryParams) error
 	MarkWebhookSuccess(ctx context.Context, arg MarkWebhookSuccessParams) error
 	MessageStatusCounts(ctx context.Context, createdAt pgtype.Timestamptz) ([]MessageStatusCountsRow, error)
+	// Retention (count mode): rows to delete = everything past the newest `keep`.
+	MessagesBeyondCount(ctx context.Context, arg MessagesBeyondCountParams) ([]MessagesBeyondCountRow, error)
+	// Retention (age mode): message rows + their body refs older than the cutoff.
+	MessagesOlderThan(ctx context.Context, arg MessagesOlderThanParams) ([]MessagesOlderThanRow, error)
 	QueueDepth(ctx context.Context) (int64, error)
 	RecordFailedAuth(ctx context.Context, id uuid.UUID) (int32, error)
 	RemoveSuppression(ctx context.Context, arg RemoveSuppressionParams) error
@@ -125,6 +131,7 @@ type Querier interface {
 	UpdateDomainStatus(ctx context.Context, arg UpdateDomainStatusParams) (Domain, error)
 	UpdateMailboxWebhook(ctx context.Context, arg UpdateMailboxWebhookParams) (Mailbox, error)
 	UpsertDNSRecord(ctx context.Context, arg UpsertDNSRecordParams) error
+	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	// Recompute one hourly per-domain bucket from source tables.
 	UpsertStatRollup(ctx context.Context, arg UpsertStatRollupParams) error
 }

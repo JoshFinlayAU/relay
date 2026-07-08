@@ -40,6 +40,18 @@ func (q *Queries) CountRecentMessagesByCredential(ctx context.Context, arg Count
 	return count, err
 }
 
+const deleteMessagesByIDs = `-- name: DeleteMessagesByIDs :execrows
+DELETE FROM messages WHERE id = ANY($1::uuid[])
+`
+
+func (q *Queries) DeleteMessagesByIDs(ctx context.Context, ids []uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMessagesByIDs, ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const enqueueDeliveryJob = `-- name: EnqueueDeliveryJob :one
 INSERT INTO delivery_jobs (message_id, rcpt)
 VALUES ($1, $2)
@@ -181,7 +193,10 @@ WHERE ($3::text IS NULL OR direction = $3)
   AND ($6::uuid IS NULL OR credential_id = $6)
   AND ($7::timestamptz IS NULL OR created_at >= $7)
   AND ($8::timestamptz IS NULL OR created_at <= $8)
-  AND ($9::text IS NULL OR $9 = ANY(rcpt_to))
+  AND ($9::text IS NULL
+       OR EXISTS (SELECT 1 FROM unnest(rcpt_to) AS r WHERE r ILIKE $9))
+  AND ($10::text IS NULL OR header_from ILIKE $10)
+  AND ($11::text IS NULL OR subject ILIKE $11)
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -195,7 +210,9 @@ type ListMessagesParams struct {
 	CredentialID *uuid.UUID         `json:"credential_id"`
 	After        pgtype.Timestamptz `json:"after"`
 	Before       pgtype.Timestamptz `json:"before"`
-	Rcpt         *string            `json:"rcpt"`
+	RcptLike     *string            `json:"rcpt_like"`
+	FromLike     *string            `json:"from_like"`
+	SubjectLike  *string            `json:"subject_like"`
 }
 
 func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error) {
@@ -208,7 +225,9 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 		arg.CredentialID,
 		arg.After,
 		arg.Before,
-		arg.Rcpt,
+		arg.RcptLike,
+		arg.FromLike,
+		arg.SubjectLike,
 	)
 	if err != nil {
 		return nil, err
@@ -268,6 +287,82 @@ func (q *Queries) MessageStatusCounts(ctx context.Context, createdAt pgtype.Time
 	for rows.Next() {
 		var i MessageStatusCountsRow
 		if err := rows.Scan(&i.Status, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const messagesBeyondCount = `-- name: MessagesBeyondCount :many
+SELECT id, body_ref FROM messages
+ORDER BY created_at DESC
+OFFSET $1
+LIMIT $2
+`
+
+type MessagesBeyondCountParams struct {
+	Keep int32 `json:"keep"`
+	Lim  int32 `json:"lim"`
+}
+
+type MessagesBeyondCountRow struct {
+	ID      uuid.UUID `json:"id"`
+	BodyRef *string   `json:"body_ref"`
+}
+
+// Retention (count mode): rows to delete = everything past the newest `keep`.
+func (q *Queries) MessagesBeyondCount(ctx context.Context, arg MessagesBeyondCountParams) ([]MessagesBeyondCountRow, error) {
+	rows, err := q.db.Query(ctx, messagesBeyondCount, arg.Keep, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MessagesBeyondCountRow{}
+	for rows.Next() {
+		var i MessagesBeyondCountRow
+		if err := rows.Scan(&i.ID, &i.BodyRef); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const messagesOlderThan = `-- name: MessagesOlderThan :many
+SELECT id, body_ref FROM messages
+WHERE created_at < $1
+ORDER BY created_at
+LIMIT $2
+`
+
+type MessagesOlderThanParams struct {
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Limit     int32              `json:"limit"`
+}
+
+type MessagesOlderThanRow struct {
+	ID      uuid.UUID `json:"id"`
+	BodyRef *string   `json:"body_ref"`
+}
+
+// Retention (age mode): message rows + their body refs older than the cutoff.
+func (q *Queries) MessagesOlderThan(ctx context.Context, arg MessagesOlderThanParams) ([]MessagesOlderThanRow, error) {
+	rows, err := q.db.Query(ctx, messagesOlderThan, arg.CreatedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MessagesOlderThanRow{}
+	for rows.Next() {
+		var i MessagesOlderThanRow
+		if err := rows.Scan(&i.ID, &i.BodyRef); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

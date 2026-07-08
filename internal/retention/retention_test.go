@@ -101,6 +101,65 @@ func TestRetentionKeepsSharedBlob(t *testing.T) {
 	}
 }
 
+func TestRetentionCountMode(t *testing.T) {
+	ctx := context.Background()
+	blobs, _ := storage.New(t.TempDir())
+	_, _ = testStore.Pool.Exec(ctx, "DELETE FROM messages")
+	_, _ = testStore.Pool.Exec(ctx, "DELETE FROM app_settings")
+
+	// Five messages, distinct ages; keep the newest 2.
+	base := time.Now()
+	var refs []string
+	for i := 0; i < 5; i++ {
+		ref, _ := blobs.Put([]byte("body-" + string(rune('a'+i))))
+		refs = append(refs, ref)
+		insertMsg(t, uuid.New(), "outbound", ref, base.Add(-time.Duration(i)*time.Hour))
+	}
+	if err := SavePolicy(ctx, testStore, Policy{Enabled: true, Mode: ModeCount, MaxMessages: 2}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := &Worker{Store: testStore, Blobs: blobs, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		OutboundBodies: 0, InboundBodies: 0, Metadata: 0}
+	w.Sweep(ctx)
+
+	var n int
+	_ = testStore.Pool.QueryRow(ctx, "SELECT count(*) FROM messages").Scan(&n)
+	if n != 2 {
+		t.Fatalf("count-mode kept %d messages, want 2", n)
+	}
+	// The 3 oldest bodies (refs[2..4]) should be gone; the 2 newest remain.
+	for i := 2; i < 5; i++ {
+		if _, err := blobs.Get(refs[i]); err == nil {
+			t.Errorf("blob for pruned message %d still present", i)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := blobs.Get(refs[i]); err != nil {
+			t.Errorf("blob for kept message %d was deleted", i)
+		}
+	}
+}
+
+func TestRetentionPolicyValidate(t *testing.T) {
+	bad := []Policy{
+		{Mode: ModeAge, Days: 0},
+		{Mode: ModeAge, Days: 99999},
+		{Mode: ModeCount, MaxMessages: 0},
+		{Mode: "bogus", Days: 5},
+	}
+	for _, p := range bad {
+		if err := p.Validate(); err == nil {
+			t.Errorf("expected %+v to be invalid", p)
+		}
+	}
+	for _, p := range []Policy{{Mode: ModeAge, Days: 30}, {Mode: ModeCount, MaxMessages: 1000}} {
+		if err := p.Validate(); err != nil {
+			t.Errorf("expected %+v valid, got %v", p, err)
+		}
+	}
+}
+
 func insertMsg(t *testing.T, id uuid.UUID, dir, ref string, created time.Time) {
 	t.Helper()
 	_, err := testStore.Pool.Exec(context.Background(),

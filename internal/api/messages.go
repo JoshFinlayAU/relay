@@ -89,7 +89,16 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if v := q.Get("rcpt"); v != "" {
-		params.Rcpt = &v
+		like := "%" + v + "%"
+		params.RcptLike = &like
+	}
+	if v := q.Get("from"); v != "" {
+		like := "%" + v + "%"
+		params.FromLike = &like
+	}
+	if v := q.Get("subject"); v != "" {
+		like := "%" + v + "%"
+		params.SubjectLike = &like
 	}
 	if v := q.Get("after"); v != "" {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {

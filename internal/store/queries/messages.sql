@@ -20,9 +20,29 @@ WHERE (sqlc.narg('direction')::text IS NULL OR direction = sqlc.narg('direction'
   AND (sqlc.narg('credential_id')::uuid IS NULL OR credential_id = sqlc.narg('credential_id'))
   AND (sqlc.narg('after')::timestamptz IS NULL OR created_at >= sqlc.narg('after'))
   AND (sqlc.narg('before')::timestamptz IS NULL OR created_at <= sqlc.narg('before'))
-  AND (sqlc.narg('rcpt')::text IS NULL OR sqlc.narg('rcpt') = ANY(rcpt_to))
+  AND (sqlc.narg('rcpt_like')::text IS NULL
+       OR EXISTS (SELECT 1 FROM unnest(rcpt_to) AS r WHERE r ILIKE sqlc.narg('rcpt_like')))
+  AND (sqlc.narg('from_like')::text IS NULL OR header_from ILIKE sqlc.narg('from_like'))
+  AND (sqlc.narg('subject_like')::text IS NULL OR subject ILIKE sqlc.narg('subject_like'))
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
+
+-- name: MessagesOlderThan :many
+-- Retention (age mode): message rows + their body refs older than the cutoff.
+SELECT id, body_ref FROM messages
+WHERE created_at < $1
+ORDER BY created_at
+LIMIT $2;
+
+-- name: MessagesBeyondCount :many
+-- Retention (count mode): rows to delete = everything past the newest `keep`.
+SELECT id, body_ref FROM messages
+ORDER BY created_at DESC
+OFFSET sqlc.arg('keep')
+LIMIT sqlc.arg('lim');
+
+-- name: DeleteMessagesByIDs :execrows
+DELETE FROM messages WHERE id = ANY(sqlc.arg('ids')::uuid[]);
 
 -- name: MessageStatusCounts :many
 SELECT status, count(*)::bigint AS n FROM messages

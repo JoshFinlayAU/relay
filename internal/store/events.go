@@ -20,9 +20,14 @@ func (q *Queries) EmitEvent(ctx context.Context, domainID uuid.UUID, typ string,
 		}
 		raw = b
 	}
-	did := domainID
+	// uuid.Nil ⇒ a global (non-domain) event: store NULL rather than a bogus FK.
+	var didp *uuid.UUID
+	if domainID != uuid.Nil {
+		did := domainID
+		didp = &did
+	}
 	_, err := q.InsertEvent(ctx, InsertEventParams{
-		DomainID: &did,
+		DomainID: didp,
 		Type:     typ,
 		Detail:   raw,
 	})

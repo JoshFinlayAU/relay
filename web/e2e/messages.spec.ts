@@ -23,9 +23,14 @@ test("messages screen renders with filters", async ({ page }) => {
   await expect(page.getByLabel("Filter status")).toBeVisible();
   await expect(page.getByLabel("Filter direction")).toBeVisible();
 
-  // Filtering by a status re-queries without error.
+  // Detailed search: sender + subject + status, then run the query.
+  await page.getByLabel("Search sender").fill("orders@example.com");
+  await page.getByLabel("Search subject").fill("invoice");
   await page.getByLabel("Filter status").selectOption("delivered");
-  await page.waitForTimeout(200);
+  await page.getByTestId("search-messages").click();
+  await expect(page.getByText(/result/)).toBeVisible(); // result count line
+  // Reset clears the active filters.
+  await page.getByRole("button", { name: "Reset" }).click();
 
   expect(errors(), errors().join("\n")).toEqual([]);
 });

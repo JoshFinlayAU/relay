@@ -63,6 +63,8 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 | `/v1/messages` (`after`/`before`/`rcpt`) | GET | Messages (recipient search) | `e2e/messages.spec.ts` | ✅ |
 | `/v1/events` | GET | Events screen | `e2e/system.spec.ts` | ✅ |
 | `/v1/server/info` | GET | Settings screen | `e2e/system.spec.ts` | ✅ |
+| `/v1/settings/retention` | GET | Settings → Message retention | `e2e/system.spec.ts` | ✅ |
+| `/v1/settings/retention` | PUT | Settings → Message retention (save) | `e2e/system.spec.ts` | ✅ |
 
 **Coverage: every `/v1` endpoint now has a UI surface + spec.** Remaining polish
 (charts styling, code-splitting, per-credential charts, date-range picker) is Phase 11.
