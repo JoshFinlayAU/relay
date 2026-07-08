@@ -144,8 +144,10 @@ function CloudflarePanel({ domainId, onDone, onClose }: { domainId: string; onDo
           <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">Close</button>
         </div>
         <p className="text-sm text-muted-foreground">
-          Paste a Cloudflare API token scoped to <span className="font-mono text-xs">Zone → DNS → Edit</span> for this
-          domain’s zone. Relay will create every record (merging any existing SPF). The token is used once and never stored.
+          Create a token with Cloudflare’s <span className="font-mono text-xs">Edit zone DNS</span> template — it grants
+          both <span className="font-mono text-xs">Zone:Read</span> and <span className="font-mono text-xs">DNS:Edit</span>.
+          A DNS-Edit-only token can’t look up the zone and will be rejected. Relay creates every record (merging any
+          existing SPF); the token is used once and never stored.
         </p>
         <a
           href="https://dash.cloudflare.com/profile/api-tokens"
@@ -153,7 +155,7 @@ function CloudflarePanel({ domainId, onDone, onClose }: { domainId: string; onDo
           rel="noreferrer"
           className="inline-block text-sm text-primary hover:underline"
         >
-          Create a token in Cloudflare →
+          Create a token in Cloudflare (use the “Edit zone DNS” template) →
         </a>
         <div className="flex gap-2">
           <input

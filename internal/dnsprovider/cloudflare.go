@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -230,11 +231,21 @@ func (c *cfClient) do(ctx context.Context, method, url string, body, out any) er
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return fmt.Errorf("cloudflare rejected the token (check DNS:Edit permission for the zone)")
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Surface Cloudflare's actual error rather than a generic guess.
+		var e struct {
+			Errors []cfErr `json:"errors"`
+		}
+		_ = json.Unmarshal(data, &e)
+		msg := cfErrs(e.Errors)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return fmt.Errorf("cloudflare rejected the token: %s — the token needs BOTH Zone:Read and DNS:Edit for this zone (use Cloudflare's \"Edit zone DNS\" template)", msg)
+		}
+		return fmt.Errorf("cloudflare API %d: %s", resp.StatusCode, msg)
 	}
 	if out != nil {
-		return json.NewDecoder(resp.Body).Decode(out)
+		return json.Unmarshal(data, out)
 	}
 	return nil
 }
