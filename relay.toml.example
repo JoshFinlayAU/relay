@@ -1,0 +1,65 @@
+# Relay configuration file.
+#
+#   cp relay.toml.example relay.toml   # then fill in secrets and `chmod 600 relay.toml`
+#   RELAY_CONFIG=./relay.toml ./relayd
+#
+# Passing config via a file (rather than RELAY_* env vars on the command line)
+# keeps the database password, secret key, admin password, and API tokens out of
+# `ps` output and the process environment. Keep this file mode 0600.
+#
+# Any RELAY_* environment variable still overrides the matching key here, so you
+# can layer per-host overrides without editing the file. `install.sh` generates a
+# populated relay.toml for you.
+
+# ── Server identity ──────────────────────────────────────────────────────────
+# EHLO name / TLS subject. MUST match the PTR + forward DNS of the sending IP.
+hostname = "mail.example.com"
+
+# ── Listeners ────────────────────────────────────────────────────────────────
+# Dev-friendly ports shown; production uses ":443"/":587"/":465"/":25".
+http_addr        = ":8080"   # API + WebUI + ACME (use ":443" with TLS)
+submission_addr  = ":587"    # STARTTLS submission
+submissions_addr = ":465"    # implicit-TLS submission
+inbound_addr     = ":25"     # inbound / bounces
+# metrics_addr   = ":9090"   # serve Prometheus /metrics on its own listener
+#                            # (IP-restrict via firewall). Omit ⇒ /metrics is on
+#                            # the main mux behind admin auth.
+
+# ── Database ─────────────────────────────────────────────────────────────────
+database_url = "postgres://relay:CHANGE_ME@127.0.0.1:5432/relay?sslmode=disable"
+max_conns    = 10
+auto_migrate = true          # apply pending migrations on boot
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+# 32-byte base64 key for AES-256-GCM at-rest encryption (DKIM keys, webhook
+# secrets). Generate: head -c32 /dev/urandom | base64
+secret_key = ""
+
+# Static admin bearer tokens (break-glass / API / scripts). TOML array.
+admin_tokens = ["CHANGE_ME"]
+
+# Bootstrap local admin account, created on first boot if no admin users exist.
+# Change the password from the Admin Users screen afterwards.
+admin_user     = "admin"
+admin_password = "change-me-at-least-8-chars"
+
+# ── Storage / logging ────────────────────────────────────────────────────────
+storage_dir = "storage"      # content-addressed message bodies
+log_level   = "info"         # debug|info|warn|error
+
+# Subnets allowed to AUTH on port 25 (CIDR). TOML array.
+port25_auth_subnets = []
+
+# ── TLS / Let's Encrypt (certmagic) ──────────────────────────────────────────
+# When true, http_addr serves HTTPS (use ":443"), an ACME HTTP-01 + redirect
+# server runs on acme_http_addr (":80"), and the SMTP listeners share the cert.
+# Requires public DNS for `hostname` and :80/:443 reachable. Leave false for dev.
+tls_enabled    = false
+acme_email     = "ops@example.com"
+acme_staging   = false
+acme_http_addr = ":80"
+# acme_ca      = ""          # override ACME directory URL (e.g. Pebble in tests)
+
+# Load-test sink: route ALL outbound delivery to this host:port (skips MX lookup).
+# Leave empty in production.
+smtp_sink = ""

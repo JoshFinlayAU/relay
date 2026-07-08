@@ -1,0 +1,40 @@
+# Go
+/relayd
+/bin/
+*.test
+*.out
+coverage.*
+
+# Build / web
+/web/node_modules/
+/web/dist/
+web/dist/
+/web/test-results/
+/web/playwright-report/
+/web/.playwright/
+
+# Runtime data & secrets
+/storage/
+*.local.toml
+/relay.toml
+!relay.toml.example
+.env
+.env.*
+!.env.example
+*.pem
+!testdata/**/*.pem
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# TS build info
+web/*.tsbuildinfo
+
+# AI junk
+CLAUDE.md
+PLAN.md
+TASKS.md
+DECISIONS.md

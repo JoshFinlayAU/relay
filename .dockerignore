@@ -1,0 +1,32 @@
+# Keep the build context small and secret-free. The Go stage does `COPY . .`,
+# so anything not excluded here lands in an intermediate build layer.
+.git
+.gitignore
+
+# Secrets / runtime data - must never enter the image.
+.env
+.env.*
+relay.toml
+*.local.toml
+storage/
+*.pem
+
+# Web deps/artifacts - the web stage rebuilds these from source.
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+web/.playwright/
+web/*.tsbuildinfo
+
+# Build output / local junk.
+relayd
+*.out
+*.test
+coverage.*
+
+# Docs not needed to build (keep the context lean).
+CLAUDE.md
+PLAN.md
+TASKS.md
+DECISIONS.md

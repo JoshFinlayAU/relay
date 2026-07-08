@@ -1,0 +1,51 @@
+# GitLab CI for Relay. Stages: lint → test → e2e.
+stages: [lint, test, e2e]
+
+variables:
+  POSTGRES_DB: relay_test
+  POSTGRES_USER: relay
+  POSTGRES_PASSWORD: relay_dev_pw
+  RELAY_TEST_DATABASE_URL: "postgres://relay:relay_dev_pw@postgres:5432/relay_test?sslmode=disable"
+
+.go-image: &go-image
+  image: golang:1.25-bookworm
+
+lint:go:
+  <<: *go-image
+  stage: lint
+  script:
+    - go vet ./...
+    - test -z "$(gofmt -l $(find . -name '*.go' -not -path './internal/store/*'))"
+
+test:go:
+  <<: *go-image
+  stage: test
+  services:
+    - name: postgres:16
+      alias: postgres
+  script:
+    - go test ./... -count=1
+
+# Dedicated open-relay guard: unauthenticated/relay attempts on every listener
+# must be rejected. A regression here fails the pipeline.
+test:open-relay:
+  <<: *go-image
+  stage: test
+  services:
+    - name: postgres:16
+      alias: postgres
+  script:
+    - go test ./internal/smtp/... -run 'OpenRelay|NonBounce|WrongDomain|Suppressed' -count=1 -v
+
+e2e:playwright:
+  image: mcr.microsoft.com/playwright:v1.49.1-jammy
+  stage: e2e
+  services:
+    - name: postgres:16
+      alias: postgres
+  variables:
+    RELAY_TEST_DATABASE_URL: "postgres://relay:relay_dev_pw@postgres:5432/relay_test?sslmode=disable"
+  script:
+    - echo "Build the SPA, start relayd on :8090, run Playwright (see 'make e2e')."
+    - echo "Requires Go + Node in one image; wire in when the CI runner image is finalised."
+  allow_failure: true

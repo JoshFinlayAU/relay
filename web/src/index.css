@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Relay design system - "Ethereal Glass" dashboard.
+  Dark-first, OLED-deep, indigo/emerald energy, machined-hardware surfaces.
+*/
+:root,
+:root.dark {
+  --background: 230 28% 6%;
+  --surface: 230 22% 9%;
+  --card: 230 22% 10%;
+  --elevated: 230 20% 13%;
+  --muted: 230 16% 17%;
+  --muted-foreground: 228 12% 64%;
+  --border: 230 16% 18%;
+  --hairline: 0 0% 100%;
+  --foreground: 220 40% 98%;
+  --primary: 245 84% 67%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 230 20% 15%;
+  --emerald: 158 72% 45%;
+  --amber: 32 94% 58%;
+  --rose: 350 82% 63%;
+  --destructive: 350 82% 60%;
+  --ring: 245 84% 67%;
+  --shadow-color: 230 60% 3%;
+}
+
+:root.light {
+  --background: 228 30% 97%;
+  --surface: 0 0% 100%;
+  --card: 0 0% 100%;
+  --elevated: 0 0% 100%;
+  --muted: 228 20% 94%;
+  --muted-foreground: 228 10% 42%;
+  --border: 228 16% 88%;
+  --hairline: 230 30% 30%;
+  --foreground: 230 30% 12%;
+  --primary: 245 78% 60%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 228 24% 92%;
+  --emerald: 158 68% 38%;
+  --amber: 32 90% 46%;
+  --rose: 350 74% 50%;
+  --destructive: 350 74% 50%;
+  --ring: 245 78% 60%;
+  --shadow-color: 230 30% 60%;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  margin: 0;
+  font-family: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ambient mesh + grain, fixed and non-interactive (perf-safe). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 12% -8%, hsl(245 84% 60% / 0.16), transparent 60%),
+    radial-gradient(50rem 40rem at 100% 0%, hsl(158 72% 45% / 0.10), transparent 55%),
+    radial-gradient(40rem 40rem at 50% 120%, hsl(280 84% 60% / 0.08), transparent 60%);
+}
+
+.font-mono,
+code,
+pre {
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
+  font-feature-settings: "zero";
+}
+
+/* Refined scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.28);
+}
+
+:focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Entry animation - heavy fade-up, respects reduced-motion. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise {
+  animation: rise 0.6s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
