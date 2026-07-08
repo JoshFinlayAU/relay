@@ -118,17 +118,29 @@ if ! $SUDO pg_isready -q 2>/dev/null; then
 fi
 $SUDO pg_isready -q 2>/dev/null && ok "PostgreSQL is running" || warn "could not confirm PostgreSQL is running (continuing)"
 
-psql_su() { $SUDO -u postgres psql -tAqc "$1" 2>/dev/null; }
+# Run a psql command as the 'postgres' superuser (peer auth on the local socket):
+# as root switch users with `su`; otherwise use `sudo -u`.
+psql_su() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    su -s /bin/sh postgres -c "cd /tmp && psql -tAqc \"$1\""
+  else
+    sudo -u postgres psql -tAqc "$1"
+  fi
+}
 
 # ── 4. Database + role ────────────────────────────────────────────────────--
 step "Provisioning database"
+# Fail loudly (not silently under set -e) if we can't reach PostgreSQL as superuser.
+if ! pg_err="$(psql_su "SELECT 1" 2>&1)"; then
+  die "cannot connect to PostgreSQL as the 'postgres' superuser:\n    ${pg_err}\n    Ensure PostgreSQL is running and reachable on the local socket."
+fi
 DB_NAME="${DB_NAME:-relay}"
 DB_USER="${DB_USER:-relay}"
 # If a relay.toml already exists, its database_url is the source of truth.
 EXISTING_URL=""
 [[ -f relay.toml ]] && EXISTING_URL="$(grep -E '^\s*database_url\s*=' relay.toml | tail -n1 | sed -E 's/.*=\s*"?([^"]*)"?.*/\1/' || true)"
 
-role_exists=$(psql_su "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'")
+role_exists=$(psql_su "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" 2>/dev/null || true)
 if [[ "$role_exists" == "1" ]]; then
   ok "role '$DB_USER' exists"
   # Reuse the password already baked into .env; else default dev password.
@@ -139,12 +151,12 @@ else
   psql_su "CREATE ROLE $DB_USER LOGIN PASSWORD '$DB_PASSWORD'" >/dev/null
   ok "created role '$DB_USER'"
 fi
-if [[ "$(psql_su "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'")" == "1" ]]; then
+if [[ "$(psql_su "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" 2>/dev/null || true)" == "1" ]]; then
   ok "database '$DB_NAME' exists"
 else
   psql_su "CREATE DATABASE $DB_NAME OWNER $DB_USER" >/dev/null && ok "created database '$DB_NAME'"
 fi
-if $WITH_TEST_DB && [[ "$(psql_su "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}_test'")" != "1" ]]; then
+if $WITH_TEST_DB && [[ "$(psql_su "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}_test'" 2>/dev/null || true)" != "1" ]]; then
   psql_su "CREATE DATABASE ${DB_NAME}_test OWNER $DB_USER" >/dev/null && ok "created database '${DB_NAME}_test'"
 fi
 DB_URL="postgres://$DB_USER:$DB_PASSWORD@127.0.0.1:5432/$DB_NAME?sslmode=disable"
