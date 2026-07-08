@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getServerInfo } from "../api/system";
 import { getRetention, setRetention, type RetentionPolicy } from "../api/settings";
-import { Button, Card } from "../components/ui";
+import { Button, Card, CopyButton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { cn } from "../lib/utils";
 
@@ -23,6 +23,58 @@ export default function Settings() {
             <Field label="Sending IPv4" value={data.sending_ipv4} mono />
             <Field label="Sending IPv6" value={data.sending_ipv6} mono />
           </Card>
+
+          <div>
+            <h2 className="mb-2 text-lg font-semibold">Server DNS</h2>
+            <Card className="space-y-3 p-5 text-sm">
+              <p className="text-muted-foreground">
+                Publish these for the mail host itself so it can send/receive and pass SPF. These
+                back the SPF <span className="font-mono text-xs">include:{data.spf_include}</span> that
+                domains onboarded here reference.
+              </p>
+              {(!data.sending_ipv4 || !data.sending_ipv6) && (
+                <p className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-3 text-xs text-orange-300">
+                  {!data.sending_ipv4 && !data.sending_ipv6
+                    ? "No public sending IP was detected."
+                    : `Only ${data.sending_ipv4 ? "IPv4" : "IPv6"} was detected.`}{" "}
+                  If this host is behind NAT/port-forwarding (or has multiple IPv6 addresses), set{" "}
+                  <span className="font-mono">sending_ipv4</span> / <span className="font-mono">sending_ipv6</span> in
+                  <span className="font-mono"> relay.toml</span> to your public (internet-facing) address and restart —
+                  SPF and the records below depend on it.
+                </p>
+              )}
+              {data.server_dns.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="border-b border-border text-left text-muted-foreground">
+                      <tr>
+                        <th className="px-2 py-2 font-medium">Type</th>
+                        <th className="px-2 py-2 font-medium">Name</th>
+                        <th className="px-2 py-2 font-medium">Value</th>
+                        <th className="px-2 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.server_dns.map((r, i) => (
+                        <tr key={i} className="border-b border-border last:border-0">
+                          <td className="px-2 py-2 font-mono text-xs">{r.type}</td>
+                          <td className="px-2 py-2 font-mono text-xs break-all">{r.name}</td>
+                          <td className="px-2 py-2 font-mono text-xs break-all">{r.value}</td>
+                          <td className="px-2 py-2 text-right"><CopyButton text={r.value} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Also required (set with your IP/hosting provider, not in your DNS zone):
+                reverse DNS (PTR) for {data.sending_ipv4 || "your public IPv4"}
+                {data.sending_ipv6 ? ` and ${data.sending_ipv6}` : ""} must resolve to{" "}
+                <span className="font-mono">{data.ptr_expected}</span>.
+              </p>
+            </Card>
+          </div>
 
           <div>
             <h2 className="mb-2 text-lg font-semibold">TLS</h2>

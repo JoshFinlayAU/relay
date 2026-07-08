@@ -56,6 +56,11 @@ func run() error {
 	logger := newLogger(cfg.LogLevel)
 	slog.SetDefault(logger)
 	logger.Info("starting relayd", "hostname", cfg.Hostname, "http_addr", cfg.HTTPAddr)
+	// Surface the derived server identity so operators can verify it (especially
+	// auto-detected sending IPs — pin them in relay.toml if the guess is wrong).
+	logger.Info("server identity",
+		"spf_include", cfg.SPFInclude, "dmarc_rua", cfg.DMARCRua,
+		"sending_ipv4", cfg.SendingIPv4, "sending_ipv6", cfg.SendingIPv6)
 
 	// Root context cancelled on SIGINT/SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -7,6 +7,13 @@ export interface Event {
   created_at: string | null;
 }
 
+export interface DnsRecord {
+  purpose: string;
+  type: string;
+  name: string;
+  value: string;
+}
+
 export interface ServerInfo {
   hostname: string;
   version: string;
@@ -17,6 +24,10 @@ export interface ServerInfo {
   cert: { managed: boolean; not_after?: string; days_remaining?: number };
   sending_ipv4: string;
   sending_ipv6: string;
+  spf_include: string;
+  dmarc_rua: string;
+  ptr_expected: string;
+  server_dns: DnsRecord[];
 }
 
 export function listEvents(params: Record<string, string> = {}): Promise<{ events: Event[]; next_cursor: string }> {

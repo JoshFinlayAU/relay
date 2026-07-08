@@ -2,8 +2,37 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 )
+
+// serverDNSRecords are the records the operator must publish for the mail host
+// itself (distinct from per-customer-domain records): forward A/AAAA and the
+// SPF include target that authorises the sending IPs.
+func (s *Server) serverDNSRecords() []map[string]string {
+	recs := []map[string]string{}
+	if s.SendingIPv4 != "" {
+		recs = append(recs, map[string]string{"purpose": "host_a", "type": "A", "name": s.Hostname, "value": s.SendingIPv4})
+	}
+	if s.SendingIPv6 != "" {
+		recs = append(recs, map[string]string{"purpose": "host_aaaa", "type": "AAAA", "name": s.Hostname, "value": s.SendingIPv6})
+	}
+	// SPF include target: v=spf1 with whichever IPs we have.
+	var mech []string
+	if s.SendingIPv4 != "" {
+		mech = append(mech, "ip4:"+s.SendingIPv4)
+	}
+	if s.SendingIPv6 != "" {
+		mech = append(mech, "ip6:"+s.SendingIPv6)
+	}
+	if s.Params.SPFInclude != "" && len(mech) > 0 {
+		recs = append(recs, map[string]string{
+			"purpose": "spf_target", "type": "TXT", "name": s.Params.SPFInclude,
+			"value": "v=spf1 " + strings.Join(mech, " ") + " -all",
+		})
+	}
+	return recs
+}
 
 // handleServerInfo powers the Settings screen: identity, TLS/cert status,
 // listener addresses, live queue depth, and DB health.
@@ -33,5 +62,9 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request) {
 		"cert":         cert,
 		"sending_ipv4": s.SendingIPv4,
 		"sending_ipv6": s.SendingIPv6,
+		"spf_include":  s.Params.SPFInclude,
+		"dmarc_rua":    s.Params.DMARCRua,
+		"ptr_expected": s.Hostname, // reverse DNS for the sending IPs must resolve here
+		"server_dns":   s.serverDNSRecords(),
 	})
 }

@@ -8,7 +8,7 @@ test("settings and events screens render", async ({ page }) => {
   await page.getByRole("link", { name: "Settings" }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByText("mail.as135559.net.au")).toBeVisible(); // hostname
+  await expect(page.getByText("mail.as135559.net.au").first()).toBeVisible(); // hostname
   await expect(page.getByRole("heading", { name: "Listeners" })).toBeVisible();
 
   // Message retention: switch to count mode, set a limit, save.

@@ -30,6 +30,19 @@ database_url = "postgres://relay:CHANGE_ME@127.0.0.1:5432/relay?sslmode=disable"
 max_conns    = 10
 auto_migrate = true          # apply pending migrations on boot
 
+# ── Server identity (auto-derived; override only if needed) ──────────────────
+# By default these are derived from `hostname` + the host's public IPs:
+#   spf_include  -> "spf.<hostname>"          (publish an SPF record there)
+#   dmarc_rua    -> "mailto:dmarc@<domain>"   (registrable domain of hostname)
+#   sending_ipv4 / sending_ipv6 -> first global-unicast IP on a local interface
+# IMPORTANT: on hosts with multiple IPv6 addresses (SLAAC/privacy), auto-detect
+# may pick the wrong one - pin sending_ipv6 to your advertised, PTR-matching
+# address. Check the "Server DNS" card in Settings to verify what was chosen.
+# spf_include  = "spf.mail.example.com"
+# dmarc_rua    = "mailto:dmarc@example.com"
+# sending_ipv4 = "203.0.113.10"
+# sending_ipv6 = "2001:db8::10"
+
 # ── Secrets ──────────────────────────────────────────────────────────────────
 # 32-byte base64 key for AES-256-GCM at-rest encryption (DKIM keys, webhook
 # secrets). Generate: head -c32 /dev/urandom | base64

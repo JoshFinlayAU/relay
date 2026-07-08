@@ -4,12 +4,14 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"golang.org/x/net/publicsuffix"
 )
 
 // Config is the fully-resolved runtime configuration.
@@ -113,10 +115,9 @@ func Default() Config {
 		StorageDir:          "storage",
 		DNSReverifyInterval: 6 * time.Hour,
 		LogLevel:            "info",
-		SPFInclude:          "spf.mail.as135559.net.au",
-		DMARCRua:            "mailto:dmarc@as135559.net.au",
-		SendingIPv4:         "160.30.37.130",
-		SendingIPv6:         "2001:df4:2040:5::2",
+		// SPFInclude / DMARCRua / SendingIPv4 / SendingIPv6 intentionally left
+		// empty: derived from Hostname + detected public IPs in derive() unless
+		// explicitly set in the config file or environment.
 		DNSResolvers:        []string{"1.1.1.1:53", "8.8.8.8:53"},
 		MaxMessageBytes:     26 << 20, // 26 MiB
 		SubmissionEnabled:   true,
@@ -158,11 +159,65 @@ func Load() (Config, error) {
 	}
 
 	c.applyEnv()
+	c.derive()
 
 	if err := c.Validate(); err != nil {
 		return c, err
 	}
 	return c, nil
+}
+
+// derive fills server-identity fields from the hostname and the host's public
+// IPs when they weren't set explicitly, so a deployment only has to configure
+// `hostname` to get correct SPF include / DMARC / sending IPs.
+func (c *Config) derive() {
+	if c.SPFInclude == "" && c.Hostname != "" {
+		// The include target the operator publishes an SPF record at.
+		c.SPFInclude = "spf." + c.Hostname
+	}
+	if c.DMARCRua == "" && c.Hostname != "" {
+		c.DMARCRua = "mailto:dmarc@" + registrableDomain(c.Hostname)
+	}
+	if c.SendingIPv4 == "" {
+		c.SendingIPv4 = detectPublicIP(false)
+	}
+	if c.SendingIPv6 == "" {
+		c.SendingIPv6 = detectPublicIP(true)
+	}
+}
+
+// registrableDomain returns the eTLD+1 of host (mail.example.com -> example.com),
+// falling back to host itself when it isn't a normal public domain.
+func registrableDomain(host string) string {
+	if d, err := publicsuffix.EffectiveTLDPlusOne(host); err == nil {
+		return d
+	}
+	return host
+}
+
+// detectPublicIP returns the first globally-routable address bound to a local
+// interface (the server's own public IP on a directly-addressed VM). Returns ""
+// if none is found; operators can always override via config.
+func detectPublicIP(v6 bool) string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, a := range addrs {
+		ipnet, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip := ipnet.IP
+		if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+			continue
+		}
+		is6 := ip.To4() == nil
+		if is6 == v6 {
+			return ip.String()
+		}
+	}
+	return ""
 }
 
 func (c *Config) applyEnv() {

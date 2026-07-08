@@ -12,6 +12,24 @@ func TestDefaultIsValid(t *testing.T) {
 	}
 }
 
+func TestDeriveFromHostname(t *testing.T) {
+	c := Config{Hostname: "mail.example.com"}
+	c.derive()
+	if c.SPFInclude != "spf.mail.example.com" {
+		t.Errorf("SPFInclude = %q, want spf.mail.example.com", c.SPFInclude)
+	}
+	if c.DMARCRua != "mailto:dmarc@example.com" {
+		t.Errorf("DMARCRua = %q, want mailto:dmarc@example.com", c.DMARCRua)
+	}
+
+	// Explicit values must be preserved (not overwritten).
+	c2 := Config{Hostname: "mail.example.com", SPFInclude: "custom.spf.host", DMARCRua: "mailto:x@y.z", SendingIPv4: "203.0.113.5"}
+	c2.derive()
+	if c2.SPFInclude != "custom.spf.host" || c2.DMARCRua != "mailto:x@y.z" || c2.SendingIPv4 != "203.0.113.5" {
+		t.Errorf("derive overwrote explicit values: %+v", c2)
+	}
+}
+
 func TestValidate(t *testing.T) {
 	tests := []struct {
 		name    string
