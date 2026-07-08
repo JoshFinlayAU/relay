@@ -59,6 +59,11 @@ if [[ "$(id -u)" -ne 0 ]]; then command -v sudo >/dev/null 2>&1 && SUDO="sudo" |
 HAVE_APT=false; command -v apt-get >/dev/null 2>&1 && HAVE_APT=true
 export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
 
+# Read a scalar string value from relay.toml (e.g. toml_str admin_user).
+toml_str() { grep -E "^\s*$1\s*=" relay.toml 2>/dev/null | tail -n1 | sed -E 's/^[^=]*=\s*//; s/^"//; s/"\s*$//'; }
+# First entry of the admin_tokens = ["..."] array.
+toml_first_token() { grep -E '^\s*admin_tokens\s*=' relay.toml 2>/dev/null | sed -E 's/.*\[\s*"?([^",]*)"?.*/\1/'; }
+
 # Minimum versions.
 GO_MIN=1.23; GO_INSTALL=1.25.11; NODE_MIN=18
 
@@ -232,16 +237,37 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 WantedBy=multi-user.target
 UNIT
     ok "wrote $unit (reads $CONFIG_FILE)"
-    $SUDO systemctl daemon-reload
-    $SUDO systemctl enable --now relayd >/dev/null 2>&1
-    sleep 2
-    if $SUDO systemctl is-active --quiet relayd; then ok "relayd.service is running"; SERVICE_ACTIVE=true
-    else warn "service installed but not active - check: journalctl -u relayd -e"; fi
+    # Guard every systemctl call with `|| true` so a start failure can't abort
+    # the script (set -e) before we report status + logs.
+    $SUDO systemctl daemon-reload || true
+    $SUDO systemctl enable relayd >/dev/null 2>&1 || true
+    $SUDO systemctl restart relayd >/dev/null 2>&1 || true
+    # First boot runs migrations (and ACME if TLS is on) - give it a few seconds.
+    for _ in 1 2 3 4 5 6 7 8; do
+      $SUDO systemctl is-active --quiet relayd && break
+      sleep 1
+    done
+    if $SUDO systemctl is-active --quiet relayd; then
+      ok "relayd.service is running"
+      SERVICE_ACTIVE=true
+    else
+      warn "relayd.service did not become active - recent logs:"
+      $SUDO journalctl -u relayd -n 15 --no-pager 2>/dev/null | sed 's/^/      /' || true
+      warn "fix the above, then: ${SUDO:+sudo }systemctl restart relayd"
+    fi
   fi
 fi
 
 # ── done ────────────────────────────────────────────────────────────────────
-URL="http://localhost${HTTP_ADDR}"
+# Build the URL from scheme (TLS?) + host + port.
+TLS_ON="$(toml_str tls_enabled)"
+HOST_CFG="$(toml_str hostname)"; HOST_CFG="${HOST_CFG:-localhost}"
+PORT="${HTTP_ADDR#:}"
+if [[ "$TLS_ON" == "true" ]]; then
+  [[ "$PORT" == "443" ]] && URL="https://$HOST_CFG" || URL="https://$HOST_CFG:$PORT"
+else
+  [[ "$PORT" == "80" ]] && URL="http://localhost" || URL="http://localhost:$PORT"
+fi
 echo -e "\n${B}${G}✓ Relay is installed.${N}"
 if $SERVICE_ACTIVE; then
   echo -e "\n${B}Service:${N} relayd.service is enabled and running (reads $CONFIG_FILE)."
@@ -254,14 +280,27 @@ else
   echo -e "    ${C}RELAY_CONFIG=./relay.toml ./relayd${N}"
 fi
 echo -e "\n${B}Then open:${N} $URL"
+# Always show login details. Freshly generated ones are in memory; on a re-run
+# read them back from relay.toml so the operator is never left guessing.
+FROM_FILE=""
+if [[ -z "$ADMIN_PASSWORD" && -f relay.toml ]]; then
+  ADMIN_USER="$(toml_str admin_user)"
+  ADMIN_PASSWORD="$(toml_str admin_password)"
+  ADMIN_TOKEN="$(toml_first_token)"
+  FROM_FILE=1
+fi
 if [[ -n "$ADMIN_PASSWORD" ]]; then
-  echo -e "\n${B}Login (generated - shown once, also stored in relay.toml):${N}"
+  echo -e "\n${B}Login${N} (also stored in ${C}relay.toml${N}):"
   echo -e "    user:      ${C}${ADMIN_USER}${N}"
   echo -e "    password:  ${C}${ADMIN_PASSWORD}${N}"
   echo -e "    API token: ${C}${ADMIN_TOKEN}${N}"
-  echo -e "    ${Y}Change the password from the Admin Users screen after first login.${N}"
+  if [[ -n "$FROM_FILE" ]]; then
+    echo -e "    ${Y}(from relay.toml - if you changed the password in the UI, use that instead.)${N}"
+  else
+    echo -e "    ${Y}Change the password from the Admin Users screen after first login.${N}"
+  fi
 else
-  echo -e "\n    Credentials are in your existing ${C}relay.toml${N} (admin_user / admin_password / admin_tokens)."
+  echo -e "\n    Credentials are in ${C}relay.toml${N} (admin_user / admin_password / admin_tokens)."
 fi
 echo -e "\n${B}Notes:${N}"
 echo -e "    • Secrets live in ${C}relay.toml${N} (mode 0600) - never in ps/env. Schema auto-migrates on boot."
