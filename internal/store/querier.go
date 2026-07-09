@@ -72,6 +72,7 @@ type Querier interface {
 	GetCredentialByUsername(ctx context.Context, username string) (Credential, error)
 	GetDomain(ctx context.Context, id uuid.UUID) (Domain, error)
 	GetDomainByName(ctx context.Context, name string) (Domain, error)
+	GetDomainDeliveryMaxAge(ctx context.Context, id uuid.UUID) (*int32, error)
 	GetMailbox(ctx context.Context, id uuid.UUID) (Mailbox, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
@@ -120,6 +121,8 @@ type Querier interface {
 	RevokeCredentialDomain(ctx context.Context, arg RevokeCredentialDomainParams) error
 	SetAdminDisabled(ctx context.Context, arg SetAdminDisabledParams) error
 	SetCredentialLock(ctx context.Context, arg SetCredentialLockParams) error
+	// $2 NULL clears the override (fall back to the global default).
+	SetDomainDeliveryMaxAge(ctx context.Context, arg SetDomainDeliveryMaxAgeParams) (Domain, error)
 	SetDomainForwardBounces(ctx context.Context, arg SetDomainForwardBouncesParams) (Domain, error)
 	SetDomainReceiving(ctx context.Context, arg SetDomainReceivingParams) (Domain, error)
 	SetDomainSendingPaused(ctx context.Context, arg SetDomainSendingPausedParams) (Domain, error)

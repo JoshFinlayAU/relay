@@ -120,7 +120,7 @@ func (p *Pool) process(ctx context.Context, job store.DeliveryJob) {
 	msg, err := p.Store.GetMessage(ctx, job.MessageID)
 	if err != nil {
 		p.Log.Error("delivery: get message", "job", job.ID, "err", err)
-		p.deferOrFail(ctx, job, 0, "internal: message missing")
+		p.deferOrFail(ctx, job, nil, 0, "internal: message missing")
 		return
 	}
 	if msg.BodyRef == nil {
@@ -129,7 +129,7 @@ func (p *Pool) process(ctx context.Context, job store.DeliveryJob) {
 	}
 	data, err := p.Blobs.Get(*msg.BodyRef)
 	if err != nil {
-		p.deferOrFail(ctx, job, 0, "internal: body unreadable")
+		p.deferOrFail(ctx, job, msg.DomainID, 0, "internal: body unreadable")
 		return
 	}
 	mailFrom := ""
@@ -153,7 +153,7 @@ func (p *Pool) process(ctx context.Context, job store.DeliveryJob) {
 	} else {
 		hosts, err := ResolveMX(ctx, p.Resolver, domain)
 		if err != nil || len(hosts) == 0 {
-			p.deferOrFail(ctx, job, 0, "no MX for "+domain)
+			p.deferOrFail(ctx, job, msg.DomainID, 0, "no MX for "+domain)
 			return
 		}
 		in.MXHosts = hosts
@@ -180,7 +180,7 @@ func (p *Pool) process(ctx context.Context, job store.DeliveryJob) {
 		if p.Metrics.DeferByDomain != nil {
 			p.Metrics.DeferByDomain.WithLabelValues(domain).Inc()
 		}
-		p.deferOrFail(ctx, job, res.Code, res.Response)
+		p.deferOrFail(ctx, job, msg.DomainID, res.Code, res.Response)
 	}
 	p.updateMessageStatus(ctx, job.MessageID)
 }
@@ -217,8 +217,9 @@ func (p *Pool) record(ctx context.Context, job store.DeliveryJob, res Result) {
 	})
 }
 
-func (p *Pool) deferOrFail(ctx context.Context, job store.DeliveryJob, code int, resp string) {
-	if job.CreatedAt.Valid && p.Retry.GiveUp(job.CreatedAt.Time, time.Now()) {
+func (p *Pool) deferOrFail(ctx context.Context, job store.DeliveryJob, domainID *uuid.UUID, code int, resp string) {
+	maxAge := p.effectiveMaxAge(ctx, domainID)
+	if job.CreatedAt.Valid && !time.Now().Before(job.CreatedAt.Time.Add(maxAge)) {
 		p.failJob(ctx, job, code, "gave up after max age: "+resp)
 		return
 	}
@@ -228,6 +229,21 @@ func (p *Pool) deferOrFail(ctx context.Context, job store.DeliveryJob, code int,
 		p.Metrics.Deferred.Inc()
 	}
 	p.Log.Info("deferred", "msg", job.MessageID, "rcpt", job.Rcpt, "attempts", job.Attempts, "resp", resp)
+}
+
+// effectiveMaxAge is the domain's per-domain give-up period if set, else the
+// pool's configured default.
+func (p *Pool) effectiveMaxAge(ctx context.Context, domainID *uuid.UUID) time.Duration {
+	d := p.Retry.MaxAge
+	if d <= 0 {
+		d = DefaultRetryPolicy().MaxAge
+	}
+	if domainID != nil {
+		if secs, err := p.Store.GetDomainDeliveryMaxAge(ctx, *domainID); err == nil && secs != nil && *secs > 0 {
+			return time.Duration(*secs) * time.Second
+		}
+	}
+	return d
 }
 
 func (p *Pool) failJob(ctx context.Context, job store.DeliveryJob, code int, resp string) {

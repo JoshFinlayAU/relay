@@ -125,16 +125,17 @@ type DnsRecord struct {
 }
 
 type Domain struct {
-	ID              uuid.UUID          `json:"id"`
-	Name            string             `json:"name"`
-	Status          string             `json:"status"`
-	Receiving       bool               `json:"receiving"`
-	VerifyToken     string             `json:"verify_token"`
-	BounceSubdomain string             `json:"bounce_subdomain"`
-	ForwardBounces  bool               `json:"forward_bounces"`
-	SendingPaused   bool               `json:"sending_paused"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ID                    uuid.UUID          `json:"id"`
+	Name                  string             `json:"name"`
+	Status                string             `json:"status"`
+	Receiving             bool               `json:"receiving"`
+	VerifyToken           string             `json:"verify_token"`
+	BounceSubdomain       string             `json:"bounce_subdomain"`
+	ForwardBounces        bool               `json:"forward_bounces"`
+	SendingPaused         bool               `json:"sending_paused"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	DeliveryMaxAgeSeconds *int32             `json:"delivery_max_age_seconds"`
 }
 
 type Event struct {

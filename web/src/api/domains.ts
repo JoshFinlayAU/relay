@@ -10,6 +10,7 @@ export interface Domain {
   sending_paused: boolean;
   forward_bounces: boolean;
   bounce_subdomain: string;
+  delivery_max_age_seconds: number | null; // null = global default
   created_at: string | null;
   updated_at: string | null;
 }
@@ -96,7 +97,9 @@ export function provisionDNS(id: string, apiToken: string): Promise<{ results: P
 
 export function patchDomain(
   id: string,
-  patch: Partial<Pick<Domain, "receiving" | "sending_paused" | "forward_bounces">>,
+  patch: Partial<Pick<Domain, "receiving" | "sending_paused" | "forward_bounces">> & {
+    delivery_max_age_seconds?: number; // <=0 clears the override
+  },
 ): Promise<{ domain: Domain }> {
   return api(`/v1/domains/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }

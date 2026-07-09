@@ -25,7 +25,7 @@ func (q *Queries) CountDomains(ctx context.Context) (int64, error) {
 const createDomain = `-- name: CreateDomain :one
 INSERT INTO domains (name, receiving, verify_token, bounce_subdomain)
 VALUES ($1, $2, $3, $4)
-RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at
+RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds
 `
 
 type CreateDomainParams struct {
@@ -54,6 +54,7 @@ func (q *Queries) CreateDomain(ctx context.Context, arg CreateDomainParams) (Dom
 		&i.SendingPaused,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveryMaxAgeSeconds,
 	)
 	return i, err
 }
@@ -68,7 +69,7 @@ func (q *Queries) DeleteDomain(ctx context.Context, id uuid.UUID) error {
 }
 
 const getDomain = `-- name: GetDomain :one
-SELECT id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at FROM domains WHERE id = $1
+SELECT id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds FROM domains WHERE id = $1
 `
 
 func (q *Queries) GetDomain(ctx context.Context, id uuid.UUID) (Domain, error) {
@@ -85,12 +86,13 @@ func (q *Queries) GetDomain(ctx context.Context, id uuid.UUID) (Domain, error) {
 		&i.SendingPaused,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveryMaxAgeSeconds,
 	)
 	return i, err
 }
 
 const getDomainByName = `-- name: GetDomainByName :one
-SELECT id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at FROM domains WHERE name = $1
+SELECT id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds FROM domains WHERE name = $1
 `
 
 func (q *Queries) GetDomainByName(ctx context.Context, name string) (Domain, error) {
@@ -107,12 +109,24 @@ func (q *Queries) GetDomainByName(ctx context.Context, name string) (Domain, err
 		&i.SendingPaused,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveryMaxAgeSeconds,
 	)
 	return i, err
 }
 
+const getDomainDeliveryMaxAge = `-- name: GetDomainDeliveryMaxAge :one
+SELECT delivery_max_age_seconds FROM domains WHERE id = $1
+`
+
+func (q *Queries) GetDomainDeliveryMaxAge(ctx context.Context, id uuid.UUID) (*int32, error) {
+	row := q.db.QueryRow(ctx, getDomainDeliveryMaxAge, id)
+	var delivery_max_age_seconds *int32
+	err := row.Scan(&delivery_max_age_seconds)
+	return delivery_max_age_seconds, err
+}
+
 const listActiveDomains = `-- name: ListActiveDomains :many
-SELECT id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at FROM domains WHERE status IN ('active','degraded')
+SELECT id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds FROM domains WHERE status IN ('active','degraded')
 `
 
 func (q *Queries) ListActiveDomains(ctx context.Context) ([]Domain, error) {
@@ -135,6 +149,7 @@ func (q *Queries) ListActiveDomains(ctx context.Context) ([]Domain, error) {
 			&i.SendingPaused,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeliveryMaxAgeSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -147,7 +162,7 @@ func (q *Queries) ListActiveDomains(ctx context.Context) ([]Domain, error) {
 }
 
 const listDomains = `-- name: ListDomains :many
-SELECT id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at FROM domains
+SELECT id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds FROM domains
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -177,6 +192,7 @@ func (q *Queries) ListDomains(ctx context.Context, arg ListDomainsParams) ([]Dom
 			&i.SendingPaused,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeliveryMaxAgeSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -188,8 +204,37 @@ func (q *Queries) ListDomains(ctx context.Context, arg ListDomainsParams) ([]Dom
 	return items, nil
 }
 
+const setDomainDeliveryMaxAge = `-- name: SetDomainDeliveryMaxAge :one
+UPDATE domains SET delivery_max_age_seconds = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds
+`
+
+type SetDomainDeliveryMaxAgeParams struct {
+	ID                    uuid.UUID `json:"id"`
+	DeliveryMaxAgeSeconds *int32    `json:"delivery_max_age_seconds"`
+}
+
+// $2 NULL clears the override (fall back to the global default).
+func (q *Queries) SetDomainDeliveryMaxAge(ctx context.Context, arg SetDomainDeliveryMaxAgeParams) (Domain, error) {
+	row := q.db.QueryRow(ctx, setDomainDeliveryMaxAge, arg.ID, arg.DeliveryMaxAgeSeconds)
+	var i Domain
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Status,
+		&i.Receiving,
+		&i.VerifyToken,
+		&i.BounceSubdomain,
+		&i.ForwardBounces,
+		&i.SendingPaused,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeliveryMaxAgeSeconds,
+	)
+	return i, err
+}
+
 const setDomainForwardBounces = `-- name: SetDomainForwardBounces :one
-UPDATE domains SET forward_bounces = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at
+UPDATE domains SET forward_bounces = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds
 `
 
 type SetDomainForwardBouncesParams struct {
@@ -211,12 +256,13 @@ func (q *Queries) SetDomainForwardBounces(ctx context.Context, arg SetDomainForw
 		&i.SendingPaused,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveryMaxAgeSeconds,
 	)
 	return i, err
 }
 
 const setDomainReceiving = `-- name: SetDomainReceiving :one
-UPDATE domains SET receiving = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at
+UPDATE domains SET receiving = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds
 `
 
 type SetDomainReceivingParams struct {
@@ -238,12 +284,13 @@ func (q *Queries) SetDomainReceiving(ctx context.Context, arg SetDomainReceiving
 		&i.SendingPaused,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveryMaxAgeSeconds,
 	)
 	return i, err
 }
 
 const setDomainSendingPaused = `-- name: SetDomainSendingPaused :one
-UPDATE domains SET sending_paused = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at
+UPDATE domains SET sending_paused = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds
 `
 
 type SetDomainSendingPausedParams struct {
@@ -265,12 +312,13 @@ func (q *Queries) SetDomainSendingPaused(ctx context.Context, arg SetDomainSendi
 		&i.SendingPaused,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveryMaxAgeSeconds,
 	)
 	return i, err
 }
 
 const updateDomainStatus = `-- name: UpdateDomainStatus :one
-UPDATE domains SET status = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at
+UPDATE domains SET status = $2 WHERE id = $1 RETURNING id, name, status, receiving, verify_token, bounce_subdomain, forward_bounces, sending_paused, created_at, updated_at, delivery_max_age_seconds
 `
 
 type UpdateDomainStatusParams struct {
@@ -292,6 +340,7 @@ func (q *Queries) UpdateDomainStatus(ctx context.Context, arg UpdateDomainStatus
 		&i.SendingPaused,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeliveryMaxAgeSeconds,
 	)
 	return i, err
 }

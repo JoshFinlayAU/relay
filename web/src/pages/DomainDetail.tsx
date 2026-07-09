@@ -56,6 +56,13 @@ export default function DomainDetail() {
         <Switch label="Forward bounces to webhook" checked={domain.forward_bounces} onChange={(v) => patchMut.mutate({ forward_bounces: v })} />
       </Card>
 
+      {/* Delivery expiry */}
+      <DeliveryExpiry
+        seconds={domain.delivery_max_age_seconds}
+        saving={patchMut.isPending}
+        onSave={(secs) => patchMut.mutate({ delivery_max_age_seconds: secs })}
+      />
+
       {/* DNS - traffic-light, collapsible, auto-configure */}
       <DnsPanel domainId={id} />
 
@@ -83,5 +90,51 @@ export default function DomainDetail() {
         </div>
       )}
     </div>
+  );
+}
+
+function DeliveryExpiry({
+  seconds,
+  saving,
+  onSave,
+}: {
+  seconds: number | null;
+  saving: boolean;
+  onSave: (secs: number) => void;
+}) {
+  const [hours, setHours] = useState(seconds ? String(seconds / 3600) : "");
+  const usingDefault = seconds == null;
+  const save = () => {
+    const h = parseFloat(hours);
+    onSave(!hours.trim() || isNaN(h) || h <= 0 ? 0 : Math.round(h * 3600));
+  };
+  return (
+    <Card className="space-y-3 p-5 text-sm">
+      <div>
+        <h2 className="text-base font-semibold">Delivery expiry</h2>
+        <p className="text-muted-foreground">
+          How long a deferred message keeps retrying before it&apos;s failed/bounced.{" "}
+          {usingDefault
+            ? "Currently using the server default."
+            : `Currently ${seconds! / 3600}h for this domain.`}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={0}
+          step="0.5"
+          aria-label="Delivery expiry hours"
+          value={hours}
+          onChange={(e) => setHours(e.target.value)}
+          placeholder="default"
+          className="w-28 rounded-md border border-border bg-background px-3 py-1.5 outline-none focus:border-primary"
+        />
+        <span className="text-muted-foreground">hours (blank / 0 = server default)</span>
+        <Button className="ml-2" onClick={save} disabled={saving} data-testid="save-expiry">
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </Card>
   );
 }

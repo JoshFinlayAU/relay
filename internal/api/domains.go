@@ -30,6 +30,7 @@ type domainDTO struct {
 	SendingPaused   bool       `json:"sending_paused"`
 	ForwardBounces  bool       `json:"forward_bounces"`
 	BounceSubdomain string     `json:"bounce_subdomain"`
+	MaxAgeSeconds   *int32     `json:"delivery_max_age_seconds"` // null = use global default
 	CreatedAt       *time.Time `json:"created_at"`
 	UpdatedAt       *time.Time `json:"updated_at"`
 }
@@ -43,6 +44,7 @@ func toDomainDTO(d store.Domain) domainDTO {
 		SendingPaused:   d.SendingPaused,
 		ForwardBounces:  d.ForwardBounces,
 		BounceSubdomain: d.BounceSubdomain,
+		MaxAgeSeconds:   d.DeliveryMaxAgeSeconds,
 		CreatedAt:       tsPtr(d.CreatedAt),
 		UpdatedAt:       tsPtr(d.UpdatedAt),
 	}
@@ -186,6 +188,9 @@ type patchDomainReq struct {
 	Receiving      *bool `json:"receiving"`
 	SendingPaused  *bool `json:"sending_paused"`
 	ForwardBounces *bool `json:"forward_bounces"`
+	// Per-domain delivery give-up period (seconds). <=0 clears the override
+	// (falls back to the global default). Omit to leave unchanged.
+	DeliveryMaxAgeSeconds *int `json:"delivery_max_age_seconds"`
 }
 
 func (s *Server) handlePatchDomain(w http.ResponseWriter, r *http.Request) {
@@ -218,6 +223,21 @@ func (s *Server) handlePatchDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil && req.ForwardBounces != nil {
 		d, err = s.Store.SetDomainForwardBounces(r.Context(), store.SetDomainForwardBouncesParams{ID: d.ID, ForwardBounces: *req.ForwardBounces})
+	}
+	if err == nil && req.DeliveryMaxAgeSeconds != nil {
+		var secs *int32 // nil clears the override
+		if v := *req.DeliveryMaxAgeSeconds; v > 0 {
+			if v < 60 || v > 30*24*3600 {
+				errBadRequest(w, "invalid_max_age", "delivery_max_age_seconds must be between 60 and 2592000 (30 days), or <=0 to use the default")
+				return
+			}
+			n := int32(v)
+			secs = &n
+		}
+		d, err = s.Store.SetDomainDeliveryMaxAge(r.Context(), store.SetDomainDeliveryMaxAgeParams{ID: d.ID, DeliveryMaxAgeSeconds: secs})
+		if err == nil {
+			_ = s.Store.EmitEvent(r.Context(), d.ID, "domain.delivery_max_age_updated", map[string]any{"seconds": secs})
+		}
 	}
 	if err != nil {
 		errInternal(w, s.Log, "patch domain", err)

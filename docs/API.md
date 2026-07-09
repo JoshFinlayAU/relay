@@ -89,6 +89,22 @@ curl -sX POST https://$HOST/v1/domains/<id>/verify -H "Authorization: Bearer $KE
 The **A/AAAA/SPF records for the mail host itself** (and the PTR requirement) are
 shown in the WebUI under **Settings → Server DNS** / `GET /v1/server/info`.
 
+### Domain settings
+
+`PATCH /v1/domains/{id}` toggles per-domain settings:
+
+```bash
+curl -sX PATCH https://$HOST/v1/domains/<id> \
+  -H "Authorization: Bearer $KEY" \
+  -d '{"receiving":true,"sending_paused":false,"forward_bounces":false,
+       "delivery_max_age_seconds":86400}'
+```
+
+- `delivery_max_age_seconds` — how long a deferred message keeps retrying before
+  it is failed/bounced, for this domain (60–2592000s). Send `<=0` to clear the
+  override and fall back to the server default (`delivery_max_age` in config).
+  `GET /v1/domains/{id}` reports it (`null` = using the default).
+
 ## Send: create an SMTP credential
 
 Apps send via SMTP (587 STARTTLS / 465 implicit TLS) using per-app credentials.

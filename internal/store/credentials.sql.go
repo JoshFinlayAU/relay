@@ -141,7 +141,7 @@ func (q *Queries) GrantCredentialDomain(ctx context.Context, arg GrantCredential
 }
 
 const listCredentialDomains = `-- name: ListCredentialDomains :many
-SELECT d.id, d.name, d.status, d.receiving, d.verify_token, d.bounce_subdomain, d.forward_bounces, d.sending_paused, d.created_at, d.updated_at FROM domains d
+SELECT d.id, d.name, d.status, d.receiving, d.verify_token, d.bounce_subdomain, d.forward_bounces, d.sending_paused, d.created_at, d.updated_at, d.delivery_max_age_seconds FROM domains d
 JOIN credential_domains cd ON cd.domain_id = d.id
 WHERE cd.credential_id = $1
 `
@@ -166,6 +166,7 @@ func (q *Queries) ListCredentialDomains(ctx context.Context, credentialID uuid.U
 			&i.SendingPaused,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeliveryMaxAgeSeconds,
 		); err != nil {
 			return nil, err
 		}

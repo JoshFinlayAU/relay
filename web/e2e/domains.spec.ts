@@ -50,6 +50,11 @@ test("onboard a domain end to end", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Configure DNS" })).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
 
+  // Per-domain delivery expiry: set 12h and confirm it persists.
+  await page.getByLabel("Delivery expiry hours").fill("12");
+  await page.getByTestId("save-expiry").click();
+  await expect(page.getByText(/Currently 12h for this domain/)).toBeVisible();
+
   // Delete with confirmation.
   await page.getByRole("button", { name: "Delete" }).click();
   const confirm = page.getByRole("dialog", { name: "confirm-delete" });
