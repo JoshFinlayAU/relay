@@ -21,6 +21,8 @@
 #   --http-addr <addr>  HTTP listen address (default :8080, or :443 with --tls).
 #   --public-ipv4 <ip>  public sending IPv4 (REQUIRED if behind NAT/port-forward,
 #   --public-ipv6 <ip>  where the internet-facing IP isn't bound to this host).
+#   --detect-public-ip  auto-detect the public IP(s) via an external echo service
+#                       and pin them in relay.toml (opt-in; needs egress).
 #   --no-service        don't install the systemd unit (build + config only, for dev)
 #   --with-test-db      also create the relay_test database (for `make test`)
 #   -h | --help         show this help
@@ -47,29 +49,48 @@ die()  { echo -e "\n${R}✗ $*${N}" >&2; exit 1; }
 # ── args ────────────────────────────────────────────────────────────────────
 INSTALL_SERVICE=true
 WITH_TEST_DB=false
-TLS_ARG=false
+TLS_ARG=false; DETECT_IP=false
 HOSTNAME_ARG=""; HTTP_ADDR_ARG=""; ACME_EMAIL_ARG=""; PUB_V4=""; PUB_V6=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --no-service)    INSTALL_SERVICE=false ;;
-    --service)       INSTALL_SERVICE=true ;;  # accepted for compatibility (now the default)
-    --with-test-db)  WITH_TEST_DB=true ;;
-    --tls)           TLS_ARG=true ;;
-    --hostname)      HOSTNAME_ARG="${2:-}"; shift ;;
-    --hostname=*)    HOSTNAME_ARG="${1#*=}" ;;
-    --http-addr)     HTTP_ADDR_ARG="${2:-}"; shift ;;
-    --http-addr=*)   HTTP_ADDR_ARG="${1#*=}" ;;
-    --acme-email)    ACME_EMAIL_ARG="${2:-}"; shift ;;
-    --acme-email=*)  ACME_EMAIL_ARG="${1#*=}" ;;
-    --public-ipv4)   PUB_V4="${2:-}"; shift ;;
-    --public-ipv4=*) PUB_V4="${1#*=}" ;;
-    --public-ipv6)   PUB_V6="${2:-}"; shift ;;
-    --public-ipv6=*) PUB_V6="${1#*=}" ;;
-    -h|--help)       sed -n '2,44p' "$0" | sed 's/^#\s\?//'; exit 0 ;;
-    *)               die "unknown option: $1 (try --help)" ;;
+    --no-service)       INSTALL_SERVICE=false ;;
+    --service)          INSTALL_SERVICE=true ;;  # accepted for compatibility (now the default)
+    --with-test-db)     WITH_TEST_DB=true ;;
+    --tls)              TLS_ARG=true ;;
+    --detect-public-ip) DETECT_IP=true ;;
+    --hostname)         HOSTNAME_ARG="${2:-}"; shift ;;
+    --hostname=*)       HOSTNAME_ARG="${1#*=}" ;;
+    --http-addr)        HTTP_ADDR_ARG="${2:-}"; shift ;;
+    --http-addr=*)      HTTP_ADDR_ARG="${1#*=}" ;;
+    --acme-email)       ACME_EMAIL_ARG="${2:-}"; shift ;;
+    --acme-email=*)     ACME_EMAIL_ARG="${1#*=}" ;;
+    --public-ipv4)      PUB_V4="${2:-}"; shift ;;
+    --public-ipv4=*)    PUB_V4="${1#*=}" ;;
+    --public-ipv6)      PUB_V6="${2:-}"; shift ;;
+    --public-ipv6=*)    PUB_V6="${1#*=}" ;;
+    -h|--help)          sed -n '2,46p' "$0" | sed 's/^#\s\?//'; exit 0 ;;
+    *)                  die "unknown option: $1 (try --help)" ;;
   esac
   shift
 done
+
+# detect_ip <4|6>: return the host's public IP as seen from the internet, via a
+# best-effort external echo service (used by --detect-public-ip; the right value
+# for NAT/port-forwarded hosts, which can't see their public IP locally).
+detect_ip() {
+  local fam="$1" url ip re urls
+  if [[ "$fam" == 6 ]]; then
+    urls=("https://api6.ipify.org" "https://ipv6.icanhazip.com" "https://v6.ident.me"); re=':'
+  else
+    urls=("https://api.ipify.org" "https://ipv4.icanhazip.com" "https://v4.ident.me")
+    re='^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
+  fi
+  for url in "${urls[@]}"; do
+    ip="$(curl -fsS"$fam" --max-time 5 "$url" 2>/dev/null | tr -d '[:space:]')" || true
+    if [[ -n "$ip" && "$ip" =~ $re ]]; then echo "$ip"; return 0; fi
+  done
+  return 1
+}
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_DIR"
@@ -193,6 +214,19 @@ HOST="${HOSTNAME_ARG:-${RELAY_HOSTNAME:-$(hostname -f 2>/dev/null || hostname)}}
 if $TLS_ARG; then TLS_ENABLED=true; HTTP_ADDR="${HTTP_ADDR_ARG:-${RELAY_HTTP_ADDR:-:443}}"
 else TLS_ENABLED=false; HTTP_ADDR="${HTTP_ADDR_ARG:-${RELAY_HTTP_ADDR:-:8080}}"; fi
 ACME_EMAIL="${ACME_EMAIL_ARG:-ops@$HOST}"
+# Opt-in public-IP detection (fills any --public-ip* not given explicitly).
+if $DETECT_IP; then
+  info "detecting public IP via external echo service…"
+  [[ -z "$PUB_V4" ]] && PUB_V4="$(detect_ip 4 || true)"
+  [[ -z "$PUB_V6" ]] && PUB_V6="$(detect_ip 6 || true)"
+  [[ -n "$PUB_V4" ]] && ok "detected public IPv4: $PUB_V4" || warn "no public IPv4 detected"
+  if [[ -n "$PUB_V6" ]]; then
+    ok "detected public IPv6: $PUB_V6"
+    warn "verify this IPv6 matches your PTR/advertised address (echo services may return a temporary/privacy address); override sending_ipv6 in relay.toml if not"
+  else
+    info "no public IPv6 detected"
+  fi
+fi
 if [[ -f relay.toml ]]; then
   ok "relay.toml already exists - leaving it untouched"
   HTTP_ADDR="$(grep -E '^\s*http_addr\s*=' relay.toml | tail -n1 | sed -E 's/.*=\s*"?([^"]*)"?.*/\1/' || echo "$HTTP_ADDR")"
