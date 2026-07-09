@@ -5,6 +5,7 @@ import {
   deleteMailbox,
   listMailboxes,
   listWebhookDeliveries,
+  patchMailbox,
   redeliverWebhook,
   type Mailbox,
 } from "../api/mailboxes";
@@ -14,6 +15,7 @@ import { cn } from "../lib/utils";
 
 export default function Mailboxes({ domainId }: { domainId: string }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<Mailbox | null>(null);
   const [revealed, setRevealed] = useState<{ mailbox: Mailbox; secret: string } | null>(null);
   const qc = useQueryClient();
 
@@ -63,6 +65,9 @@ export default function Mailboxes({ domainId }: { domainId: string }) {
                   <td className="px-4 py-2 font-mono text-xs">{m.local_part}</td>
                   <td className="px-4 py-2 font-mono text-xs">{m.webhook_url}</td>
                   <td className="px-4 py-2 text-right">
+                    <Button variant="ghost" className="text-xs" data-testid="edit-webhook" onClick={() => setEditing(m)}>
+                      Edit webhook
+                    </Button>
                     <Button
                       variant="ghost"
                       className="text-xs text-destructive"
@@ -133,6 +138,17 @@ export default function Mailboxes({ domainId }: { domainId: string }) {
           }}
         />
       )}
+      {editing && (
+        <EditWebhookDialog
+          mailbox={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(r) => {
+            setEditing(null);
+            if (r.secret) setRevealed({ mailbox: r.mailbox, secret: r.secret });
+            qc.invalidateQueries({ queryKey: ["mailboxes", domainId] });
+          }}
+        />
+      )}
       {revealed && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-label="mailbox-secret">
           <Card className="w-full max-w-lg p-6">
@@ -152,6 +168,50 @@ export default function Mailboxes({ domainId }: { domainId: string }) {
           </Card>
         </div>
       )}
+    </div>
+  );
+}
+
+function EditWebhookDialog({
+  mailbox,
+  onClose,
+  onSaved,
+}: {
+  mailbox: Mailbox;
+  onClose: () => void;
+  onSaved: (r: { mailbox: Mailbox; secret?: string }) => void;
+}) {
+  const [webhookURL, setWebhookURL] = useState(mailbox.webhook_url);
+  const [secret, setSecret] = useState("");
+  const mut = useMutation({
+    mutationFn: () => patchMailbox(mailbox.id, webhookURL.trim(), secret.trim() || undefined),
+    onSuccess: onSaved,
+  });
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-label="edit-webhook">
+      <Card className="w-full max-w-md p-6">
+        <h2 className="mb-1 text-lg font-semibold">Edit webhook</h2>
+        <p className="mb-4 text-sm text-muted-foreground">Mailbox <span className="font-mono">{mailbox.local_part}</span></p>
+        <form onSubmit={(e) => { e.preventDefault(); mut.mutate(); }} className="space-y-4">
+          <div className="space-y-1">
+            <label htmlFor="edit-url" className="text-sm font-medium">Webhook URL</label>
+            <input id="edit-url" value={webhookURL} onChange={(e) => setWebhookURL(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="edit-secret" className="text-sm font-medium">New signing secret <span className="text-muted-foreground">(optional — leave blank to keep)</span></label>
+            <input id="edit-secret" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="rotate signing secret"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          </div>
+          {mut.isError && <p role="alert" className="text-sm text-destructive">{(mut.error as ApiError).message}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={mut.isPending || !webhookURL.trim()} data-testid="save-webhook">
+              {mut.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }

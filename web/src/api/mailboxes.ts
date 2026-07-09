@@ -35,6 +35,17 @@ export function createMailbox(
   });
 }
 
+export function patchMailbox(
+  id: string,
+  webhookURL: string,
+  secret?: string,
+): Promise<{ mailbox: Mailbox; secret?: string }> {
+  return api(`/v1/mailboxes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ webhook_url: webhookURL, secret }),
+  });
+}
+
 export function deleteMailbox(id: string): Promise<void> {
   return api(`/v1/mailboxes/${id}`, { method: "DELETE" });
 }

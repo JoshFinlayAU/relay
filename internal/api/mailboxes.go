@@ -138,6 +138,63 @@ func (s *Server) handleDeleteMailbox(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type patchMailboxReq struct {
+	WebhookURL string `json:"webhook_url"`
+	Secret     string `json:"secret"` // optional: rotate the signing secret
+}
+
+// handlePatchMailbox updates a mailbox's webhook URL (and optionally rotates its
+// signing secret). A rotated secret is returned once.
+func (s *Server) handlePatchMailbox(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		errBadRequest(w, "invalid_id", "id must be a UUID")
+		return
+	}
+	mb, err := s.Store.GetMailbox(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		errNotFound(w, "mailbox not found")
+		return
+	}
+	if err != nil {
+		errInternal(w, s.Log, "get mailbox", err)
+		return
+	}
+	var req patchMailboxReq
+	if err := decodeJSON(r, &req); err != nil {
+		errBadRequest(w, "invalid_json", err.Error())
+		return
+	}
+	if !validWebhookURL(req.WebhookURL) {
+		errBadRequest(w, "invalid_webhook_url", "webhook_url must be an http(s) URL and not a loopback/link-local address")
+		return
+	}
+	// Keep the existing secret unless a new one is supplied.
+	enc := mb.WebhookSecretEnc
+	newSecret := strings.TrimSpace(req.Secret)
+	rotated := newSecret != ""
+	if rotated {
+		if enc, err = s.Sealer.Seal([]byte(newSecret)); err != nil {
+			errInternal(w, s.Log, "seal webhook secret", err)
+			return
+		}
+	}
+	updated, err := s.Store.UpdateMailboxWebhook(r.Context(), store.UpdateMailboxWebhookParams{
+		ID: id, WebhookUrl: req.WebhookURL, WebhookSecretEnc: enc,
+	})
+	if err != nil {
+		errInternal(w, s.Log, "update mailbox webhook", err)
+		return
+	}
+	_ = s.Store.EmitEvent(r.Context(), updated.DomainID, "mailbox.webhook_updated",
+		map[string]any{"local_part": updated.LocalPart, "rotated_secret": rotated})
+	resp := map[string]any{"mailbox": toMailboxDTO(updated)}
+	if rotated {
+		resp["secret"] = newSecret
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // --- webhook delivery log ---
 
 type webhookDeliveryDTO struct {

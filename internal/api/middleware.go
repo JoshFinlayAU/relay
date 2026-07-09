@@ -25,10 +25,18 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 	})
 }
 
-// credentialValid checks a static token first, then a session token.
+// credentialValid checks a static config token, then a DB-managed API key, then
+// a WebUI session token.
 func (s *Server) credentialValid(r *http.Request, got string) bool {
 	if s.tokenValid(got) {
 		return true
+	}
+	// DB-managed API keys (created via the WebUI/API; revocable).
+	if tok, err := s.Store.GetActiveAPITokenByHash(r.Context(), sha256hex(got)); err == nil {
+		_ = s.Store.TouchAPIToken(r.Context(), tok.ID)
+		return true
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		s.Log.Error("api token lookup", "err", err)
 	}
 	sess, err := s.Store.GetSessionByTokenHash(r.Context(), sha256hex(got))
 	if err != nil {

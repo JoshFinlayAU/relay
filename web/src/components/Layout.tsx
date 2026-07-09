@@ -16,6 +16,7 @@ const icons: Record<string, ReactNode> = {
   messages: <I d="M4 5h16v12H7l-3 3V5Z" />,
   events: <I d="M12 8v4l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0Z" />,
   users: <I d="M16 18v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 9a3.5 3.5 0 100-7 3.5 3.5 0 000 7ZM21 18v-1a4 4 0 00-3-3.87M16 3.13A4 4 0 0116 11" />,
+  apikeys: <I d="M14 7a4 4 0 11-3.8 5.2L3 19v2h4v-2h2v-2h2l1.2-1.2A4 4 0 0114 7Zm2 1.5a1 1 0 100 2 1 1 0 000-2Z" />,
   settings: <I d="M12 15a3 3 0 100-6 3 3 0 000 6Z M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7.6 1.6 1.6 0 00-1 1.5V22a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-.6-2.7 1.6 1.6 0 00-1.5-1H2a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H8a1.6 1.6 0 001-1.5V2a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V8a1.6 1.6 0 001.5 1H22a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1Z" />,
 };
 
@@ -25,6 +26,7 @@ const nav = [
   { to: "/messages", label: "Messages", end: false, icon: "messages" },
   { to: "/events", label: "Events", end: false, icon: "events" },
   { to: "/users", label: "Admin users", end: false, icon: "users" },
+  { to: "/api-keys", label: "API keys", end: false, icon: "apikeys" },
   { to: "/settings", label: "Settings", end: false, icon: "settings" },
 ];
 

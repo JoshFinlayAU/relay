@@ -49,7 +49,7 @@ web-build:
 E2E_DB ?= postgres://relay:relay_dev_pw@127.0.0.1:5432/relay_test?sslmode=disable
 e2e: web-build build
 	@echo "starting relayd for e2e…"
-	@PGPASSWORD=relay_dev_pw psql "$(E2E_DB)" -qc "TRUNCATE domains, admin_users, admin_sessions CASCADE" 2>/dev/null || true
+	@PGPASSWORD=relay_dev_pw psql "$(E2E_DB)" -qc "TRUNCATE domains, admin_users, admin_sessions, api_tokens, app_settings CASCADE" 2>/dev/null || true
 	@RELAY_HTTP_ADDR=":8090" RELAY_DATABASE_URL="$(E2E_DB)" \
 	 RELAY_HOSTNAME="mail.as135559.net.au" \
 	 RELAY_SECRET_KEY="ZGV2LXJlbGF5LTMyLWJ5dGUta2V5LWZvci1sb2NhbCE=" \

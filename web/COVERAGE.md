@@ -16,6 +16,9 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 | `/v1/admin/users` | POST | Admin users (add) | `e2e/users.spec.ts` | ✅ |
 | `/v1/admin/users/{id}/password` | POST | Admin users (change password) | `e2e/users.spec.ts` | ✅ |
 | `/v1/admin/users/{id}` | DELETE | Admin users (delete) | `e2e/users.spec.ts` | ✅ |
+| `/v1/api-keys` | GET | API keys screen (list) | `e2e/apikeys.spec.ts` | ✅ |
+| `/v1/api-keys` | POST | API keys screen (create, one-time reveal) | `e2e/apikeys.spec.ts` | ✅ |
+| `/v1/api-keys/{id}` | DELETE | API keys screen (revoke) | `e2e/apikeys.spec.ts` | ✅ |
 | `/v1/domains` | POST | Domains → Add-domain wizard | `e2e/domains.spec.ts` | ✅ |
 | `/v1/domains` | GET | Domains (list) | `e2e/domains.spec.ts` | ✅ |
 | `/v1/domains/{id}` | GET | DomainDetail | `e2e/domains.spec.ts` | ✅ |
@@ -40,6 +43,7 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 | `/v1/messages/{id}` (bounces) | GET | MessageDetail (bounce/complaint detail) | `e2e/messages.spec.ts` | ✅ |
 | `/v1/domains/{id}/mailboxes` | POST | DomainDetail → Mailboxes (create + one-time secret) | `e2e/mailboxes.spec.ts` | ✅ |
 | `/v1/domains/{id}/mailboxes` | GET | DomainDetail → Mailboxes (list) | `e2e/mailboxes.spec.ts` | ✅ |
+| `/v1/mailboxes/{id}` | PATCH | Mailboxes → Edit webhook (set URL / rotate secret) | `e2e/mailboxes.spec.ts` | ✅ |
 | `/v1/mailboxes/{id}` | DELETE | Mailboxes (delete) | `e2e/mailboxes.spec.ts` | ✅ |
 | `/v1/domains/{id}/webhook-deliveries` | GET | Mailboxes (delivery log) | `e2e/mailboxes.spec.ts` | ✅ |
 | `/v1/webhook-deliveries/{id}/redeliver` | POST | Mailboxes (re-deliver dead-letter) | (manual) | ✅ |

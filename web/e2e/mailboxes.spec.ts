@@ -30,7 +30,16 @@ test("create a mailbox with one-time webhook secret", async ({ page }) => {
   await reveal.getByRole("button", { name: "Done" }).click();
 
   // Listed.
-  await expect(page.getByTestId("mailbox-row").filter({ hasText: "support" })).toBeVisible();
+  const row = page.getByTestId("mailbox-row").filter({ hasText: "support" });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText("example.test/inbound");
+
+  // Edit the webhook URL (set the webhook via the UI).
+  await row.getByTestId("edit-webhook").click();
+  const edit = page.getByRole("dialog", { name: "edit-webhook" });
+  await edit.getByLabel("Webhook URL").fill("https://example.test/inbound-v2");
+  await edit.getByTestId("save-webhook").click();
+  await expect(page.getByTestId("mailbox-row").filter({ hasText: "support" })).toContainText("inbound-v2");
 
   // Not retrievable after reload.
   await page.reload();

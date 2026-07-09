@@ -90,6 +90,11 @@ func (s *Server) Router() http.Handler {
 			r.Post("/admin/users/{id}/password", s.handleChangeAdminPassword)
 			r.Delete("/admin/users/{id}", s.handleDeleteAdminUser)
 
+			// API keys (programmatic access; secret shown once).
+			r.Get("/api-keys", s.handleListAPIKeys)
+			r.Post("/api-keys", s.handleCreateAPIKey)
+			r.Delete("/api-keys/{id}", s.handleRevokeAPIKey)
+
 			r.Post("/domains", s.handleCreateDomain)
 			r.Get("/domains", s.handleListDomains)
 			r.Get("/domains/{id}", s.handleGetDomain)
@@ -113,6 +118,7 @@ func (s *Server) Router() http.Handler {
 			// Mailboxes & webhooks.
 			r.Post("/domains/{id}/mailboxes", s.handleCreateMailbox)
 			r.Get("/domains/{id}/mailboxes", s.handleListMailboxes)
+			r.Patch("/mailboxes/{id}", s.handlePatchMailbox)
 			r.Delete("/mailboxes/{id}", s.handleDeleteMailbox)
 			r.Get("/domains/{id}/webhook-deliveries", s.handleListWebhookDeliveries)
 			r.Post("/webhook-deliveries/{id}/redeliver", s.handleRedeliverWebhook)

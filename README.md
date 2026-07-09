@@ -82,6 +82,14 @@ Config precedence is: built-in defaults → `relay.toml` (path in `RELAY_CONFIG`
 `RELAY_*` environment variables (override individual keys). `.env.example` documents
 the env-var form if you prefer that for local dev.
 
+## API
+
+Domains can be onboarded, verified, and wired to webhooks entirely over the REST
+API using a bearer **API key** (created on the **API keys** screen or via
+`POST /v1/api-keys`). See [`docs/API.md`](docs/API.md) for the full flow —
+create key → `POST /v1/domains` (returns the DNS records) → publish → `POST
+/v1/domains/{id}/verify` (activates) → credentials / mailbox webhooks.
+
 ## Layout
 
 Go under `cmd/` + `internal/`, SPA under `web/`, SQL migrations under

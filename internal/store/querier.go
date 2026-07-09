@@ -25,6 +25,7 @@ type Querier interface {
 	CountDomains(ctx context.Context) (int64, error)
 	CountEvents(ctx context.Context) (int64, error)
 	CountRecentMessagesByCredential(ctx context.Context, arg CountRecentMessagesByCredentialParams) (int64, error)
+	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateAdminUser(ctx context.Context, arg CreateAdminUserParams) (AdminUser, error)
 	CreateCredential(ctx context.Context, arg CreateCredentialParams) (Credential, error)
 	CreateDomain(ctx context.Context, arg CreateDomainParams) (Domain, error)
@@ -63,6 +64,7 @@ type Querier interface {
 	FailJobByRcpt(ctx context.Context, arg FailJobByRcptParams) error
 	// Match an exact local part, falling back to a catch-all ('*'), among active mailboxes.
 	FindMailbox(ctx context.Context, arg FindMailboxParams) (Mailbox, error)
+	GetActiveAPITokenByHash(ctx context.Context, tokenHash string) (ApiToken, error)
 	GetActiveDKIMKey(ctx context.Context, domainID uuid.UUID) (DkimKey, error)
 	GetAdminUser(ctx context.Context, id uuid.UUID) (AdminUser, error)
 	GetAdminUserByUsername(ctx context.Context, username string) (AdminUser, error)
@@ -83,6 +85,7 @@ type Querier interface {
 	InsertMessage(ctx context.Context, arg InsertMessageParams) (Message, error)
 	IsSuppressed(ctx context.Context, arg IsSuppressedParams) (bool, error)
 	JobStatusCounts(ctx context.Context, messageID uuid.UUID) (JobStatusCountsRow, error)
+	ListAPITokens(ctx context.Context) ([]ListAPITokensRow, error)
 	ListActiveDomains(ctx context.Context) ([]Domain, error)
 	ListAdminUsers(ctx context.Context) ([]ListAdminUsersRow, error)
 	ListBounceEvents(ctx context.Context, messageID *uuid.UUID) ([]BounceEvent, error)
@@ -113,6 +116,7 @@ type Querier interface {
 	// Recover jobs whose worker died mid-flight (locked but never completed).
 	RequeueStaleJobs(ctx context.Context, lockedAt pgtype.Timestamptz) error
 	RequeueWebhookDelivery(ctx context.Context, id uuid.UUID) error
+	RevokeAPIToken(ctx context.Context, id uuid.UUID) (int64, error)
 	RevokeCredentialDomain(ctx context.Context, arg RevokeCredentialDomainParams) error
 	SetAdminDisabled(ctx context.Context, arg SetAdminDisabledParams) error
 	SetCredentialLock(ctx context.Context, arg SetCredentialLockParams) error
@@ -121,6 +125,7 @@ type Querier interface {
 	SetDomainSendingPaused(ctx context.Context, arg SetDomainSendingPausedParams) (Domain, error)
 	SetMailboxStatus(ctx context.Context, arg SetMailboxStatusParams) (Mailbox, error)
 	SetMessageStatus(ctx context.Context, arg SetMessageStatusParams) error
+	TouchAPIToken(ctx context.Context, id uuid.UUID) error
 	TouchAdminLogin(ctx context.Context, id uuid.UUID) error
 	TouchCredentialLastUsed(ctx context.Context, id uuid.UUID) error
 	TouchSession(ctx context.Context, id uuid.UUID) error

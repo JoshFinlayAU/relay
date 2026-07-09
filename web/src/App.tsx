@@ -7,6 +7,7 @@ import DomainDetail from "./pages/DomainDetail";
 import Messages from "./pages/Messages";
 import MessageDetail from "./pages/MessageDetail";
 import Users from "./pages/Users";
+import ApiKeys from "./pages/ApiKeys";
 import Events from "./pages/Events";
 import Settings from "./pages/Settings";
 import Layout from "./components/Layout";
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/messages" element={<Messages />} />
         <Route path="/messages/:id" element={<MessageDetail />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/api-keys" element={<ApiKeys />} />
         <Route path="/events" element={<Events />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
