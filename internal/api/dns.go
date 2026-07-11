@@ -193,9 +193,10 @@ func (s *Server) handleVerifyDomain(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"domain":  toDomainDTO(d),
-		"results": results,
-		"active":  allRequiredPass,
+		"domain":   toDomainDTO(d),
+		"results":  results,
+		"active":   allRequiredPass, // all required records pass → domain active
+		"verified": allRequiredPass, // alias of "active" for this /verify endpoint
 	})
 }
 

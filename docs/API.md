@@ -76,6 +76,7 @@ curl -sX POST https://$HOST/v1/domains/<id>/verify -H "Authorization: Bearer $KE
 {
   "domain": { "id": "…", "status": "active", … },
   "active": true,
+  "verified": true,
   "results": [
     {"purpose":"ownership","result":"pass","observed":"relay-verify=…","detail":""},
     {"purpose":"spf","result":"pass","observed":"v=spf1 …","detail":""}
@@ -83,8 +84,14 @@ curl -sX POST https://$HOST/v1/domains/<id>/verify -H "Authorization: Bearer $KE
 }
 ```
 
-`result` is `pass` / `warn` / `fail` / `unknown` per record. If `active` is
-`false`, fix the `fail`/`unknown` records and call verify again.
+Success is the top-level boolean **`active`** (also returned as **`verified`** —
+they're identical). `result` is `pass` / `warn` / `fail` / `unknown` per record
+(only a `fail` on a required record blocks activation; `warn` still passes). If
+`active`/`verified` is `false`, fix the failing records and call verify again.
+
+> Note: verification queries the domain's **authoritative** nameservers directly
+> (not a cache). For a *delegated subdomain* it uses the delegated zone's
+> nameservers; those must be reachable from the relay host.
 
 The **A/AAAA/SPF records for the mail host itself** (and the PTR requirement) are
 shown in the WebUI under **Settings → Server DNS** / `GET /v1/server/info`.
