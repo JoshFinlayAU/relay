@@ -92,13 +92,21 @@ func (s *Server) handleGetDNS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"domain":       d.Name,
-		"status":       d.Status,
-		"instructions": instr,
-		"operator_note": fmt.Sprintf(
+	// One-time operator prerequisite: the SPF include target must itself publish
+	// an SPF record. Only surface the reminder when it isn't resolvable yet — once
+	// published, the note disappears (it's not a per-domain action).
+	note := ""
+	if s.Params.SPFInclude != "" && s.currentSPF(r.Context(), s.Params.SPFInclude) == "" {
+		note = fmt.Sprintf(
 			"Prerequisite (one-time, operator): publish %s TXT \"v=spf1 ip4:%s ip6:%s -all\" so the customer SPF include resolves.",
-			s.Params.SPFInclude, s.SendingIPv4, s.SendingIPv6),
+			s.Params.SPFInclude, s.SendingIPv4, s.SendingIPv6)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"domain":        d.Name,
+		"status":        d.Status,
+		"instructions":  instr,
+		"operator_note": note,
 	})
 }
 

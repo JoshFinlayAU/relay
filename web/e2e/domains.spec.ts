@@ -35,7 +35,8 @@ test("onboard a domain end to end", async ({ page }) => {
   await expect(page.getByRole("heading", { name })).toBeVisible();
   await expect(page.getByText("ownership", { exact: false })).toBeVisible();
   await expect(page.getByText("rly", { exact: false }).first()).toBeVisible(); // DKIM selector
-  await expect(page.getByText(/Prerequisite \(one-time, operator\)/)).toBeVisible();
+  // (The one-time operator SPF-include note only appears when that record isn't
+  // published yet, so it's not asserted here — it depends on live DNS.)
 
   // Copy buttons exist.
   await expect(page.getByRole("button", { name: "Copy" }).first()).toBeVisible();
