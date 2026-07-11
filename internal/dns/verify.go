@@ -65,48 +65,72 @@ func (v *Verifier) exchange(ctx context.Context, server, qname string, qtype uin
 	return in, err
 }
 
-// authoritativeServers finds the authoritative NS IPs for a domain's
-// registrable (eTLD+1) zone.
+// authoritativeServers finds the authoritative NS IPs for the closest zone that
+// covers the domain. It walks from the full name up to the registrable (eTLD+1)
+// zone so a *delegated subdomain* (its own NS records, e.g. delegated to another
+// provider) is honoured rather than the parent zone's nameservers.
 func (v *Verifier) authoritativeServers(ctx context.Context, domain string) ([]string, error) {
 	base, err := publicsuffix.EffectiveTLDPlusOne(strings.TrimSuffix(domain, "."))
 	if err != nil {
-		base = domain
+		base = strings.TrimSuffix(domain, ".")
 	}
 	var lastErr error
 	for _, boot := range v.bootstrap {
-		msg, err := v.exchange(ctx, boot, base, dns.TypeNS, true)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		var servers []string
-		for _, rr := range msg.Answer {
-			ns, ok := rr.(*dns.NS)
-			if !ok {
+		for _, zone := range zoneCandidates(domain, base) {
+			msg, err := v.exchange(ctx, boot, zone, dns.TypeNS, true)
+			if err != nil {
+				lastErr = err
 				continue
 			}
-			// Resolve the NS hostname to an IP (via bootstrap).
-			for _, qt := range []uint16{dns.TypeA, dns.TypeAAAA} {
-				a, err := v.exchange(ctx, boot, ns.Ns, qt, true)
-				if err != nil {
+			var servers []string
+			for _, rr := range msg.Answer {
+				ns, ok := rr.(*dns.NS)
+				if !ok {
 					continue
 				}
-				for _, arr := range a.Answer {
-					switch x := arr.(type) {
-					case *dns.A:
-						servers = append(servers, x.A.String()+":53")
-					case *dns.AAAA:
-						servers = append(servers, "["+x.AAAA.String()+"]:53")
+				// Resolve the NS hostname to an IP (via bootstrap).
+				for _, qt := range []uint16{dns.TypeA, dns.TypeAAAA} {
+					a, err := v.exchange(ctx, boot, ns.Ns, qt, true)
+					if err != nil {
+						continue
+					}
+					for _, arr := range a.Answer {
+						switch x := arr.(type) {
+						case *dns.A:
+							servers = append(servers, x.A.String()+":53")
+						case *dns.AAAA:
+							servers = append(servers, "["+x.AAAA.String()+"]:53")
+						}
 					}
 				}
 			}
+			// First candidate with NS records is the zone cut for this name.
+			if len(servers) > 0 {
+				return servers, nil
+			}
 		}
-		if len(servers) > 0 {
-			return servers, nil
-		}
-		lastErr = fmt.Errorf("no authoritative servers found for %s", base)
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no authoritative servers found for %s", strings.TrimSuffix(domain, "."))
 	}
 	return nil, lastErr
+}
+
+// zoneCandidates lists candidate zone names from the full domain up to base
+// (eTLD+1), most specific first, so a delegated subdomain's own nameservers are
+// discovered before falling back to the parent zone.
+func zoneCandidates(domain, base string) []string {
+	domain = strings.TrimSuffix(strings.ToLower(domain), ".")
+	base = strings.TrimSuffix(strings.ToLower(base), ".")
+	var out []string
+	for cur := domain; ; {
+		out = append(out, cur)
+		if cur == base || !strings.Contains(cur, ".") {
+			break
+		}
+		cur = cur[strings.IndexByte(cur, '.')+1:]
+	}
+	return out
 }
 
 // authQuery queries all authoritative servers for a record, returning the first
