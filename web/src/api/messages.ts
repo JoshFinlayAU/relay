@@ -1,5 +1,6 @@
 import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
+import type { WebhookDelivery } from "./mailboxes";
 
 export interface Message {
   id: string;
@@ -13,6 +14,8 @@ export interface Message {
   dkim_selector: string | null;
   domain_id: string | null;
   credential_id: string | null;
+  spf_result: string | null;
+  dkim_result: string | null;
   created_at: string | null;
 }
 
@@ -51,9 +54,12 @@ export interface BounceEvent {
   created_at: string | null;
 }
 
-export function getMessage(
-  id: string,
-): Promise<{ message: Message; attempts: DeliveryAttempt[]; bounces: BounceEvent[] }> {
+export function getMessage(id: string): Promise<{
+  message: Message;
+  attempts: DeliveryAttempt[];
+  bounces: BounceEvent[];
+  webhook_deliveries: WebhookDelivery[];
+}> {
   return api(`/v1/messages/${id}`);
 }
 

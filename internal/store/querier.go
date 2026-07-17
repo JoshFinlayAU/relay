@@ -102,6 +102,7 @@ type Querier interface {
 	ListStatRollups(ctx context.Context, arg ListStatRollupsParams) ([]ListStatRollupsRow, error)
 	ListSuppressions(ctx context.Context, arg ListSuppressionsParams) ([]Suppression, error)
 	ListWebhookDeliveriesByDomain(ctx context.Context, arg ListWebhookDeliveriesByDomainParams) ([]WebhookDelivery, error)
+	ListWebhookDeliveriesByMessage(ctx context.Context, messageID uuid.UUID) ([]WebhookDelivery, error)
 	MarkJobDelivered(ctx context.Context, arg MarkJobDeliveredParams) error
 	MarkWebhookDeadLetter(ctx context.Context, arg MarkWebhookDeadLetterParams) error
 	MarkWebhookRetry(ctx context.Context, arg MarkWebhookRetryParams) error

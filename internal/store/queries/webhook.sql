@@ -35,3 +35,6 @@ JOIN mailboxes m ON m.id = wd.mailbox_id
 WHERE m.domain_id = $1
 ORDER BY wd.created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: ListWebhookDeliveriesByMessage :many
+SELECT * FROM webhook_deliveries WHERE message_id = $1 ORDER BY attempt_no;

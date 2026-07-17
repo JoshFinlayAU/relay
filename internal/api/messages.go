@@ -36,6 +36,8 @@ type messageDTO struct {
 	DKIMSelector *string    `json:"dkim_selector"`
 	DomainID     *string    `json:"domain_id"`
 	CredentialID *string    `json:"credential_id"`
+	SPFResult    *string    `json:"spf_result"`  // inbound
+	DKIMResult   *string    `json:"dkim_result"` // inbound
 	CreatedAt    *time.Time `json:"created_at"`
 }
 
@@ -52,6 +54,8 @@ func toMessageDTO(m store.Message) messageDTO {
 		DKIMSelector: m.DkimSelector,
 		DomainID:     uuidStr(m.DomainID),
 		CredentialID: uuidStr(m.CredentialID),
+		SPFResult:    m.SpfResult,
+		DKIMResult:   m.DkimResult,
 		CreatedAt:    tsPtr(m.CreatedAt),
 	}
 }
@@ -163,7 +167,20 @@ func (s *Server) handleGetMessage(w http.ResponseWriter, r *http.Request) {
 			"rcpt": b.Rcpt, "type": b.Type, "dsn_code": b.DsnCode, "created_at": tsPtr(b.CreatedAt),
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"message": toMessageDTO(m), "attempts": out, "bounces": bOut})
+	// Inbound messages are delivered to a mailbox webhook, not an MX — surface
+	// that history so the detail view isn't blank for received mail.
+	whRows, _ := s.Store.ListWebhookDeliveriesByMessage(r.Context(), id)
+	whOut := make([]webhookDeliveryDTO, 0, len(whRows))
+	for _, wd := range whRows {
+		whOut = append(whOut, webhookDeliveryDTO{
+			ID: wd.ID.String(), MessageID: wd.MessageID.String(), AttemptNo: wd.AttemptNo,
+			StatusCode: wd.StatusCode, Result: wd.Result, ResponseSnip: wd.ResponseSnippet,
+			CreatedAt: tsPtr(wd.CreatedAt),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": toMessageDTO(m), "attempts": out, "bounces": bOut, "webhook_deliveries": whOut,
+	})
 }
 
 // handleGetMessageRaw returns the raw RFC 5322 headers of the stored message

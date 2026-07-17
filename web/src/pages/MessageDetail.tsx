@@ -32,37 +32,77 @@ export default function MessageDetail() {
         <Field label="Header From" value={m.header_from ?? "-"} mono />
         <Field label="Return-Path (VERP)" value={m.mail_from ?? "-"} mono />
         <Field label="Recipients" value={m.rcpt_to.join(", ")} mono />
-        <Field label="DKIM selector" value={m.dkim_selector ?? "-"} mono />
+        {m.direction === "inbound" ? (
+          <>
+            <Field label="SPF" value={m.spf_result ?? "-"} />
+            <Field label="DKIM" value={m.dkim_result ?? "-"} />
+          </>
+        ) : (
+          <Field label="DKIM selector" value={m.dkim_selector ?? "-"} mono />
+        )}
         <Field label="Size" value={`${m.size_bytes} bytes`} />
         <Field label="Created" value={m.created_at ? new Date(m.created_at).toLocaleString() : "-"} />
       </Card>
 
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Delivery timeline</h2>
-        {data.attempts.length === 0 && (
-          <p className="text-sm text-muted-foreground">No delivery attempts recorded yet.</p>
-        )}
-        {data.attempts.map((a, i) => (
-          <Card key={i} className="p-4" data-testid="attempt">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-mono text-xs">{a.rcpt}</span>
-              <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium capitalize", resultColor[a.result] ?? "")}>
-                {a.result}
-              </span>
-            </div>
-            <div className="space-y-1 font-mono text-xs text-muted-foreground">
-              {a.mx_host && <div>MX: {a.mx_host}</div>}
-              {(a.smtp_code || a.smtp_response) && (
-                <div>SMTP: {a.smtp_code} {a.smtp_response}</div>
-              )}
-              {a.tls_version && (
-                <div>TLS: {a.tls_version} {a.tls_verified ? "(verified)" : "(unverified)"}</div>
-              )}
-              {a.started_at && <div>At: {new Date(a.started_at).toLocaleString()}</div>}
-            </div>
-          </Card>
-        ))}
-      </div>
+      {m.direction === "inbound" ? (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Webhook delivery</h2>
+          {data.webhook_deliveries.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No webhook delivery recorded (no matching mailbox, or delivery hasn&apos;t run yet).
+            </p>
+          )}
+          {data.webhook_deliveries.map((wd, i) => (
+            <Card key={i} className="p-4" data-testid="webhook-delivery">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-mono text-xs">attempt {wd.attempt_no}</span>
+                <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium capitalize",
+                  wd.result === "success" ? "border-green-500/30 bg-green-500/10 text-green-400"
+                    : wd.result === "dead_letter" ? "border-red-500/30 bg-red-500/10 text-red-400"
+                      : "border-orange-500/30 bg-orange-500/10 text-orange-400")}>
+                  {wd.result}
+                </span>
+              </div>
+              <div className="space-y-1 font-mono text-xs text-muted-foreground">
+                {wd.status_code != null && <div>HTTP: {wd.status_code}</div>}
+                {wd.created_at && <div>At: {new Date(wd.created_at).toLocaleString()}</div>}
+                {wd.response_snippet && (
+                  <div className="whitespace-pre-wrap break-all text-foreground/70">
+                    Response: {wd.response_snippet.slice(0, 300)}
+                  </div>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Delivery timeline</h2>
+          {data.attempts.length === 0 && (
+            <p className="text-sm text-muted-foreground">No delivery attempts recorded yet.</p>
+          )}
+          {data.attempts.map((a, i) => (
+            <Card key={i} className="p-4" data-testid="attempt">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-mono text-xs">{a.rcpt}</span>
+                <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium capitalize", resultColor[a.result] ?? "")}>
+                  {a.result}
+                </span>
+              </div>
+              <div className="space-y-1 font-mono text-xs text-muted-foreground">
+                {a.mx_host && <div>MX: {a.mx_host}</div>}
+                {(a.smtp_code || a.smtp_response) && (
+                  <div>SMTP: {a.smtp_code} {a.smtp_response}</div>
+                )}
+                {a.tls_version && (
+                  <div>TLS: {a.tls_version} {a.tls_verified ? "(verified)" : "(unverified)"}</div>
+                )}
+                {a.started_at && <div>At: {new Date(a.started_at).toLocaleString()}</div>}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <RawHeaders id={id} />
 

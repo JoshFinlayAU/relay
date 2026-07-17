@@ -151,6 +151,41 @@ func (q *Queries) ListWebhookDeliveriesByDomain(ctx context.Context, arg ListWeb
 	return items, nil
 }
 
+const listWebhookDeliveriesByMessage = `-- name: ListWebhookDeliveriesByMessage :many
+SELECT id, mailbox_id, message_id, attempt_no, status_code, result, next_attempt_at, response_snippet, created_at, updated_at FROM webhook_deliveries WHERE message_id = $1 ORDER BY attempt_no
+`
+
+func (q *Queries) ListWebhookDeliveriesByMessage(ctx context.Context, messageID uuid.UUID) ([]WebhookDelivery, error) {
+	rows, err := q.db.Query(ctx, listWebhookDeliveriesByMessage, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WebhookDelivery{}
+	for rows.Next() {
+		var i WebhookDelivery
+		if err := rows.Scan(
+			&i.ID,
+			&i.MailboxID,
+			&i.MessageID,
+			&i.AttemptNo,
+			&i.StatusCode,
+			&i.Result,
+			&i.NextAttemptAt,
+			&i.ResponseSnippet,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markWebhookDeadLetter = `-- name: MarkWebhookDeadLetter :exec
 UPDATE webhook_deliveries SET result = 'dead_letter', status_code = $2, response_snippet = $3 WHERE id = $1
 `
