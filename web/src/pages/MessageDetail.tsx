@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessage, getMessageRaw } from "../api/messages";
+import { redeliverWebhook } from "../api/mailboxes";
 import { Button, Card } from "../components/ui";
 import { cn } from "../lib/utils";
 
@@ -13,9 +14,20 @@ const resultColor: Record<string, string> = {
 
 export default function MessageDetail() {
   const { id = "" } = useParams();
+  const qc = useQueryClient();
   const { data, isLoading, isError } = useQuery({
     queryKey: ["message", id],
     queryFn: () => getMessage(id),
+  });
+  const redeliver = useMutation({
+    mutationFn: (wdId: string) => redeliverWebhook(wdId),
+    // Poll the message a couple of times so the re-fired attempt shows up.
+    onSuccess: () => {
+      const bump = () => qc.invalidateQueries({ queryKey: ["message", id] });
+      bump();
+      setTimeout(bump, 1500);
+      setTimeout(bump, 4000);
+    },
   });
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -54,15 +66,27 @@ export default function MessageDetail() {
           )}
           {data.webhook_deliveries.map((wd, i) => (
             <Card key={i} className="p-4" data-testid="webhook-delivery">
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="font-mono text-xs">attempt {wd.attempt_no}</span>
-                <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium capitalize",
-                  wd.result === "success" ? "border-green-500/30 bg-green-500/10 text-green-400"
-                    : wd.result === "dead_letter" ? "border-red-500/30 bg-red-500/10 text-red-400"
-                      : "border-orange-500/30 bg-orange-500/10 text-orange-400")}>
-                  {wd.result}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium capitalize",
+                    wd.result === "success" ? "border-green-500/30 bg-green-500/10 text-green-400"
+                      : wd.result === "dead_letter" ? "border-red-500/30 bg-red-500/10 text-red-400"
+                        : "border-orange-500/30 bg-orange-500/10 text-orange-400")}>
+                    {wd.result}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    className="px-2.5 py-1 text-xs"
+                    data-testid="redeliver-webhook"
+                    onClick={() => redeliver.mutate(wd.id)}
+                    disabled={redeliver.isPending}
+                  >
+                    {redeliver.isPending ? "Re-delivering…" : "Re-deliver"}
+                  </Button>
+                </div>
               </div>
+              {redeliver.isSuccess && <p className="mb-2 text-xs text-emerald">Queued for re-delivery.</p>}
               <div className="space-y-1 font-mono text-xs text-muted-foreground">
                 {wd.status_code != null && <div>HTTP: {wd.status_code}</div>}
                 {wd.created_at && <div>At: {new Date(wd.created_at).toLocaleString()}</div>}
