@@ -185,46 +185,119 @@ func run() error {
 		logger.Info("delivery workers started", "concurrency", cfg.DeliveryConcurrency)
 	}
 
-	// TLS: certmagic-managed Let's Encrypt cert (shared by HTTPS + all SMTP
-	// listeners) when enabled, else a self-signed cert for dev.
+	// CertStore serves operator-supplied certs: the server-hostname cert from
+	// config files (tls_cert_file/tls_key_file) and per-hosted-domain certs from
+	// the DB (by SNI). It falls back to ACME or self-signed, so with nothing
+	// configured its behaviour is identical to before.
+	certLoader := func(ctx context.Context) ([]certs.Entry, error) {
+		var entries []certs.Entry
+		if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+			crt, err := os.ReadFile(cfg.TLSCertFile)
+			if err != nil {
+				return entries, fmt.Errorf("read tls_cert_file: %w", err)
+			}
+			key, err := os.ReadFile(cfg.TLSKeyFile)
+			if err != nil {
+				return entries, fmt.Errorf("read tls_key_file: %w", err)
+			}
+			entries = append(entries, certs.Entry{CertPEM: crt, KeyPEM: key})
+		}
+		rows, err := st.ListTLSCerts(ctx)
+		if err != nil {
+			return entries, err
+		}
+		for _, row := range rows {
+			keyPEM, err := sealer.Open(row.KeyEnc)
+			if err != nil {
+				logger.Warn("tls: open domain key", "domain_id", row.DomainID, "err", err)
+				continue
+			}
+			did := row.DomainID
+			entries = append(entries, certs.Entry{DomainID: &did, CertPEM: []byte(row.CertPem), KeyPEM: keyPEM})
+		}
+		return entries, nil
+	}
+	certStore := certs.NewCertStore(certLoader, logger)
+	if err := certStore.Reload(ctx); err != nil {
+		logger.Warn("tls: initial manual-cert load", "err", err)
+	}
+	srv.CertStore = certStore
+
+	// TLS: server cert from ACME (default) or manual files; per-domain certs from
+	// the CertStore; self-signed for dev.
 	var smtpTLS *tls.Config
 	var challengeSrv *http.Server
 	httpsMode := false
 	if cfg.TLSEnabled {
-		mgr, err := certs.NewManager(ctx, certs.ACMEConfig{
-			Hostname: cfg.Hostname, Email: cfg.ACMEEmail,
-			StorageDir: filepath.Join(cfg.StorageDir, "acme"),
-			Staging:    cfg.ACMEStaging, CA: cfg.ACMECA,
-		})
+		manualServer := cfg.TLSCertFile != "" && cfg.TLSKeyFile != ""
+		// Self-signed as the ultimate fallback so a bad/missing cert can't kill TLS.
+		self, err := certs.SelfSigned(cfg.Hostname)
 		if err != nil {
-			return err
+			return fmt.Errorf("self-signed cert: %w", err)
 		}
-		// ACME HTTP-01 challenge + HTTPS redirect on :80, up before issuance.
-		challengeSrv = &http.Server{
-			Addr:              cfg.ACMEHTTPAddr,
-			Handler:           mgr.ChallengeHandler(redirectToHTTPS(cfg.Hostname)),
-			ReadHeaderTimeout: 10 * time.Second,
-		}
-		go func() {
-			if err := challengeSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Error("acme/redirect (:80) listener", "err", err)
+		certStore.SetFallback(func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return &self, nil })
+
+		if cfg.ACMEEnabled && !manualServer {
+			mgr, err := certs.NewManager(ctx, certs.ACMEConfig{
+				Hostname: cfg.Hostname, Email: cfg.ACMEEmail,
+				StorageDir: filepath.Join(cfg.StorageDir, "acme"),
+				Staging:    cfg.ACMEStaging, CA: cfg.ACMECA,
+			})
+			if err != nil {
+				return err
 			}
-		}()
-		logger.Info("obtaining certificate", "hostname", cfg.Hostname, "staging", cfg.ACMEStaging)
-		if err := mgr.Obtain(ctx, cfg.Hostname); err != nil {
-			return fmt.Errorf("obtain certificate: %w", err)
+			challengeSrv = &http.Server{
+				Addr:              cfg.ACMEHTTPAddr,
+				Handler:           mgr.ChallengeHandler(redirectToHTTPS(cfg.Hostname)),
+				ReadHeaderTimeout: 10 * time.Second,
+			}
+			go func() {
+				if err := challengeSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					logger.Error("acme/redirect (:80) listener", "err", err)
+				}
+			}()
+			logger.Info("obtaining certificate", "hostname", cfg.Hostname, "staging", cfg.ACMEStaging)
+			if err := mgr.Obtain(ctx, cfg.Hostname); err != nil {
+				return fmt.Errorf("obtain certificate: %w", err)
+			}
+			certStore.SetFallback(mgr.GetCertificate)
+			httpServer.TLSConfig = mgr.HTTPSTLSConfigWith(certStore.GetCertificate)
+			srv.CertExpiry = func() (time.Time, bool) { return mgr.LeafNotAfter(cfg.Hostname) }
+			srv.TLSSource = "acme"
+			logger.Info("TLS enabled (ACME)", "hostname", cfg.Hostname)
+		} else {
+			// Manual server cert (files) and/or per-domain certs — no ACME. Keep a
+			// plain HTTP→HTTPS redirect on :80.
+			challengeSrv = &http.Server{
+				Addr:              cfg.ACMEHTTPAddr,
+				Handler:           redirectToHTTPS(cfg.Hostname),
+				ReadHeaderTimeout: 10 * time.Second,
+			}
+			go func() {
+				if err := challengeSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					logger.Error("redirect (:80) listener", "err", err)
+				}
+			}()
+			httpServer.TLSConfig = certStore.HTTPSTLSConfig()
+			srv.CertExpiry = certStore.ServerLeafNotAfter
+			if manualServer {
+				srv.TLSSource = "manual-file"
+				logger.Info("TLS enabled (manual server cert)", "hostname", cfg.Hostname)
+			} else {
+				srv.TLSSource = "self-signed"
+				logger.Warn("TLS enabled but acme_enabled=false and no tls_cert_file — serving self-signed for the hostname")
+			}
 		}
-		httpServer.TLSConfig = mgr.HTTPSTLSConfig()
-		smtpTLS = mgr.SMTPTLSConfig()
-		srv.CertExpiry = func() (time.Time, bool) { return mgr.LeafNotAfter(cfg.Hostname) }
+		smtpTLS = certStore.SMTPTLSConfig()
 		httpsMode = true
-		logger.Info("TLS enabled (ACME)", "hostname", cfg.Hostname)
 	} else if cfg.SubmissionEnabled || cfg.InboundEnabled {
 		cert, err := certs.SelfSigned(cfg.Hostname)
 		if err != nil {
 			return fmt.Errorf("self-signed cert: %w", err)
 		}
-		smtpTLS = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+		certStore.SetFallback(func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return &cert, nil })
+		smtpTLS = certStore.SMTPTLSConfig()
+		srv.TLSSource = "self-signed"
 	}
 
 	// Webhook dispatcher (delivers inbound-mail webhooks with retries).

@@ -112,6 +112,29 @@ curl -sX PATCH https://$HOST/v1/domains/<id> \
   override and fall back to the server default (`delivery_max_age` in config).
   `GET /v1/domains/{id}` reports it (`null` = using the default).
 
+## TLS certificates
+
+The **server-hostname** cert is configured in `relay.toml` (`acme_enabled`, or
+`tls_cert_file`/`tls_key_file`). After swapping renewed files, hot-reload with no
+restart:
+
+```bash
+curl -s https://$HOST/v1/settings/tls -H "Authorization: Bearer $KEY"          # status
+curl -sX POST https://$HOST/v1/settings/tls/reload -H "Authorization: Bearer $KEY"  # hot reload
+```
+
+**Per-hosted-domain** certs are served by SNI (falling back to the server cert):
+
+```bash
+# Upload / replace (PEM; cert_pem is the full chain, leaf first)
+curl -sX PUT https://$HOST/v1/domains/<id>/tls-cert -H "Authorization: Bearer $KEY" \
+  -d '{"cert_pem":"-----BEGIN CERTIFICATE-----\n…","key_pem":"-----BEGIN PRIVATE KEY-----\n…"}'
+curl -s  https://$HOST/v1/domains/<id>/tls-cert -H "Authorization: Bearer $KEY"   # status
+curl -sX DELETE https://$HOST/v1/domains/<id>/tls-cert -H "Authorization: Bearer $KEY"
+```
+
+The private key is sealed at rest and never returned.
+
 ## DMARC analyzer
 
 Relay sets every domain's DMARC `rua` to `dmarc@<mail-host>` and ingests the

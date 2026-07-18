@@ -226,6 +226,18 @@ type Suppression struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type TlsCert struct {
+	ID        uuid.UUID          `json:"id"`
+	DomainID  uuid.UUID          `json:"domain_id"`
+	CertPem   string             `json:"cert_pem"`
+	KeyEnc    []byte             `json:"key_enc"`
+	Subjects  []string           `json:"subjects"`
+	NotBefore pgtype.Timestamptz `json:"not_before"`
+	NotAfter  pgtype.Timestamptz `json:"not_after"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type WebhookDelivery struct {
 	ID              uuid.UUID          `json:"id"`
 	MailboxID       uuid.UUID          `json:"mailbox_id"`

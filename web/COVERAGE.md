@@ -70,6 +70,11 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 | `/v1/server/info` | GET | Settings screen | `e2e/system.spec.ts` | ✅ |
 | `/v1/settings/retention` | GET | Settings → Message retention | `e2e/system.spec.ts` | ✅ |
 | `/v1/settings/retention` | PUT | Settings → Message retention (save) | `e2e/system.spec.ts` | ✅ |
+| `/v1/settings/tls` | GET | Settings → TLS certificate (status) | `e2e/system.spec.ts` | ✅ |
+| `/v1/settings/tls/reload` | POST | Settings → Reload certificates | `e2e/system.spec.ts` | ✅ |
+| `/v1/domains/{id}/tls-cert` | GET | DomainDetail → `DomainTlsPanel` (status) | `e2e/domains.spec.ts` | ✅ |
+| `/v1/domains/{id}/tls-cert` | PUT | `DomainTlsPanel` (upload cert) | `internal/api` test | ✅ |
+| `/v1/domains/{id}/tls-cert` | DELETE | `DomainTlsPanel` (remove cert) | `internal/api` test | ✅ |
 
 **Coverage: every `/v1` endpoint now has a UI surface + spec.** Remaining polish
 (charts styling, code-splitting, per-credential charts, date-range picker) is Phase 11.

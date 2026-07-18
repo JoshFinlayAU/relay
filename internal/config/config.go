@@ -90,10 +90,15 @@ type Config struct {
 	// serves HTTPS on HTTPAddr (default :443), an ACME/redirect server runs on
 	// ACMEHTTPAddr (:80), and the SMTP listeners share the managed cert.
 	TLSEnabled   bool   `toml:"tls_enabled"`
+	ACMEEnabled  bool   `toml:"acme_enabled"` // obtain the server-hostname cert via ACME (default true)
 	ACMEEmail    string `toml:"acme_email"`
 	ACMEStaging  bool   `toml:"acme_staging"` // use LE staging (untrusted, high limits)
 	ACMECA       string `toml:"acme_ca"`      // override directory URL (e.g. Pebble)
 	ACMEHTTPAddr string `toml:"acme_http_addr"`
+	// Manual server-hostname certificate (PEM files). When set, used instead of
+	// ACME for the server cert (acme_enabled is then ignored for the hostname).
+	TLSCertFile string `toml:"tls_cert_file"` // full chain, leaf first
+	TLSKeyFile  string `toml:"tls_key_file"`  // private key
 
 	// Logging.
 	LogLevel string `toml:"log_level"` // debug|info|warn|error
@@ -125,6 +130,7 @@ func Default() Config {
 		DeliveryConcurrency: 8,
 		DeliveryPerDomain:   2,
 		DeliverIPv6:         true, // IPv6 first-class; falls back to IPv4 per attempt
+		ACMEEnabled:         true, // default: ACME manages the server cert when TLS is on
 		ACMEHTTPAddr:        ":80",
 
 		// Retry schedules (CLAUDE.md defaults; overridable via config file).
@@ -252,10 +258,15 @@ func (c *Config) applyEnv() {
 	if v, ok := os.LookupEnv("RELAY_TLS_ENABLED"); ok {
 		c.TLSEnabled = v == "1" || strings.EqualFold(v, "true")
 	}
+	if v, ok := os.LookupEnv("RELAY_ACME_ENABLED"); ok {
+		c.ACMEEnabled = v == "1" || strings.EqualFold(v, "true")
+	}
 	if v, ok := os.LookupEnv("RELAY_ACME_STAGING"); ok {
 		c.ACMEStaging = v == "1" || strings.EqualFold(v, "true")
 	}
 	setStr("RELAY_ACME_EMAIL", &c.ACMEEmail)
+	setStr("RELAY_TLS_CERT_FILE", &c.TLSCertFile)
+	setStr("RELAY_TLS_KEY_FILE", &c.TLSKeyFile)
 	setStr("RELAY_ACME_CA", &c.ACMECA)
 	setStr("RELAY_ACME_HTTP_ADDR", &c.ACMEHTTPAddr)
 	setStr("RELAY_SMTP_SINK", &c.SMTPSink)

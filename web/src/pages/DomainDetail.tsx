@@ -5,6 +5,7 @@ import { deleteDomain, getDomain, patchDomain } from "../api/domains";
 import { Button, Card, PageHeader, StatusBadge, Switch } from "../components/ui";
 import Credentials from "../components/Credentials";
 import DmarcPanel from "../components/DmarcPanel";
+import DomainTlsPanel from "../components/DomainTlsPanel";
 import Mailboxes from "../components/Mailboxes";
 import Suppressions from "../components/Suppressions";
 import DomainStats from "../components/DomainStats";
@@ -66,6 +67,9 @@ export default function DomainDetail() {
 
       {/* DNS - traffic-light, collapsible, auto-configure */}
       <DnsPanel domainId={id} />
+
+      {/* Per-domain TLS certificate (SNI) */}
+      <DomainTlsPanel domainId={id} />
 
       {/* Statistics + test send */}
       <DomainStats domainId={id} />

@@ -60,6 +60,10 @@ test("onboard a domain end to end", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "DMARC" })).toBeVisible();
   await expect(page.getByText(/No DMARC aggregate reports yet/)).toBeVisible();
 
+  // Per-domain TLS panel renders its empty state.
+  await expect(page.getByRole("heading", { name: "TLS certificate" })).toBeVisible();
+  await expect(page.getByText(/No per-domain certificate/)).toBeVisible();
+
   // Delete with confirmation.
   await page.getByRole("button", { name: "Delete" }).click();
   const confirm = page.getByRole("dialog", { name: "confirm-delete" });

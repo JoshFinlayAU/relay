@@ -44,6 +44,7 @@ type Querier interface {
 	DeleteCredential(ctx context.Context, id uuid.UUID) error
 	DeleteDNSRecords(ctx context.Context, domainID uuid.UUID) error
 	DeleteDomain(ctx context.Context, id uuid.UUID) error
+	DeleteDomainTLSCert(ctx context.Context, domainID uuid.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteMailbox(ctx context.Context, id uuid.UUID) error
 	DeleteMessagesByIDs(ctx context.Context, ids []uuid.UUID) (int64, error)
@@ -77,6 +78,7 @@ type Querier interface {
 	GetDomain(ctx context.Context, id uuid.UUID) (Domain, error)
 	GetDomainByName(ctx context.Context, name string) (Domain, error)
 	GetDomainDeliveryMaxAge(ctx context.Context, id uuid.UUID) (*int32, error)
+	GetDomainTLSCert(ctx context.Context, domainID uuid.UUID) (TlsCert, error)
 	GetMailbox(ctx context.Context, id uuid.UUID) (Mailbox, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (GetSessionByTokenHashRow, error)
@@ -107,6 +109,7 @@ type Querier interface {
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListStatRollups(ctx context.Context, arg ListStatRollupsParams) ([]ListStatRollupsRow, error)
 	ListSuppressions(ctx context.Context, arg ListSuppressionsParams) ([]Suppression, error)
+	ListTLSCerts(ctx context.Context) ([]ListTLSCertsRow, error)
 	ListWebhookDeliveriesByDomain(ctx context.Context, arg ListWebhookDeliveriesByDomainParams) ([]WebhookDelivery, error)
 	ListWebhookDeliveriesByMessage(ctx context.Context, messageID uuid.UUID) ([]WebhookDelivery, error)
 	MarkJobDelivered(ctx context.Context, arg MarkJobDeliveredParams) error
@@ -149,6 +152,7 @@ type Querier interface {
 	// means a fresh insert so the caller only adds rows for new reports.
 	UpsertDMARCReport(ctx context.Context, arg UpsertDMARCReportParams) (UpsertDMARCReportRow, error)
 	UpsertDNSRecord(ctx context.Context, arg UpsertDNSRecordParams) error
+	UpsertDomainTLSCert(ctx context.Context, arg UpsertDomainTLSCertParams) (TlsCert, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	// Recompute one hourly per-domain bucket from source tables.
 	UpsertStatRollup(ctx context.Context, arg UpsertStatRollupParams) error

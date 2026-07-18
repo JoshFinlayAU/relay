@@ -88,6 +88,23 @@ func (m *Manager) HTTPSTLSConfig() *tls.Config {
 	return c
 }
 
+// HTTPSTLSConfigWith is like HTTPSTLSConfig but routes certificate selection
+// through getCert (e.g. a CertStore that serves manual certs then falls back to
+// this manager). certmagic's other config (OCSP, session tickets) is preserved.
+func (m *Manager) HTTPSTLSConfigWith(getCert func(*tls.ClientHelloInfo) (*tls.Certificate, error)) *tls.Config {
+	c := m.HTTPSTLSConfig()
+	c.GetCertificate = getCert
+	c.GetConfigForClient = nil
+	return c
+}
+
+// GetCertificate serves the ACME-managed certificate (used as a CertStore
+// fallback). It calls a fresh magic TLSConfig getter, so it is safe to use even
+// when the outer config's GetCertificate has been overridden.
+func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return m.magic.TLSConfig().GetCertificate(hello)
+}
+
 // LeafNotAfter returns the managed leaf certificate's expiry for the hostname.
 func (m *Manager) LeafNotAfter(hostname string) (time.Time, bool) {
 	cert, err := m.magic.TLSConfig().GetCertificate(&tls.ClientHelloInfo{ServerName: hostname})

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getServerInfo } from "../api/system";
 import { getRetention, setRetention, type RetentionPolicy } from "../api/settings";
+import { getServerTLS, reloadServerTLS } from "../api/tls";
 import { Button, Card, CopyButton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { cn } from "../lib/utils";
@@ -76,16 +77,7 @@ export default function Settings() {
             </Card>
           </div>
 
-          <div>
-            <h2 className="mb-2 text-lg font-semibold">TLS</h2>
-            <Card className="grid grid-cols-2 gap-x-8 gap-y-3 p-5 text-sm md:grid-cols-3">
-              <Field label="TLS" value={data.tls_enabled ? "enabled (Let's Encrypt)" : "disabled (dev)"} accent={data.tls_enabled ? "text-green-400" : "text-orange-400"} />
-              {data.cert.not_after && <Field label="Cert expires" value={new Date(data.cert.not_after).toLocaleDateString()} />}
-              {typeof data.cert.days_remaining === "number" && (
-                <Field label="Days remaining" value={String(data.cert.days_remaining)} accent={data.cert.days_remaining < 14 ? "text-orange-400" : undefined} />
-              )}
-            </Card>
-          </div>
+          <ServerTLSSettings tlsEnabled={data.tls_enabled} />
 
           <div>
             <h2 className="mb-2 text-lg font-semibold">Listeners</h2>
@@ -111,6 +103,55 @@ export default function Settings() {
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+const TLS_SOURCE_LABEL: Record<string, string> = {
+  acme: "Let's Encrypt (automatic)",
+  "manual-file": "Manual (tls_cert_file / tls_key_file)",
+  "self-signed": "Self-signed (dev)",
+  disabled: "Disabled",
+};
+
+function ServerTLSSettings({ tlsEnabled }: { tlsEnabled: boolean }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["server-tls"], queryFn: getServerTLS });
+  const reload = useMutation({
+    mutationFn: reloadServerTLS,
+    onSuccess: (res) => {
+      qc.setQueryData(["server-tls"], res);
+      qc.invalidateQueries({ queryKey: ["server-info"] });
+    },
+  });
+  const src = data?.source ?? (tlsEnabled ? "acme" : "disabled");
+  return (
+    <div>
+      <h2 className="mb-2 text-lg font-semibold">TLS certificate (server hostname)</h2>
+      <Card className="space-y-3 p-5 text-sm">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-2 md:grid-cols-3">
+          <Field label="Source" value={TLS_SOURCE_LABEL[src] ?? src}
+            accent={src === "self-signed" ? "text-orange-400" : "text-green-400"} />
+          {data?.not_after && <Field label="Expires" value={new Date(data.not_after).toLocaleDateString()} />}
+          {typeof data?.days_remaining === "number" && (
+            <Field label="Days remaining" value={String(data.days_remaining)}
+              accent={data.days_remaining < 14 ? "text-orange-400" : undefined} />
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Set via <span className="font-mono">acme_enabled</span> /{" "}
+          <span className="font-mono">tls_cert_file</span> /{" "}
+          <span className="font-mono">tls_key_file</span> in relay.toml. After swapping renewed cert
+          files, hot-reload them here — no restart, no downtime.
+        </p>
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={() => reload.mutate()} disabled={reload.isPending} data-testid="reload-tls">
+            {reload.isPending ? "Reloading…" : "Reload certificates"}
+          </Button>
+          {reload.isSuccess && <span className="text-xs text-green-400">Reloaded.</span>}
+          {reload.isError && <span className="text-xs text-destructive">Reload failed.</span>}
+        </div>
+      </Card>
     </div>
   );
 }

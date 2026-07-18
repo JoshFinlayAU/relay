@@ -68,10 +68,19 @@ port25_auth_subnets = []
 # server runs on acme_http_addr (":80"), and the SMTP listeners share the cert.
 # Requires public DNS for `hostname` and :80/:443 reachable. Leave false for dev.
 tls_enabled    = false
+acme_enabled   = true         # obtain the server-hostname cert via ACME (default)
 acme_email     = "ops@example.com"
 acme_staging   = false
 acme_http_addr = ":80"
 # acme_ca      = ""          # override ACME directory URL (e.g. Pebble in tests)
+
+# Manual server-hostname certificate: set both to serve your own PEM files
+# instead of ACME (acme_enabled is then ignored for the hostname). Swap the
+# files with renewed ones and POST /v1/settings/tls/reload to hot-reload with no
+# restart. Per-hosted-domain certs are managed via the API / domain page (served
+# by SNI, falling back to this cert).
+# tls_cert_file = "/etc/relay/tls/fullchain.pem"
+# tls_key_file  = "/etc/relay/tls/privkey.pem"
 
 # Load-test sink: route ALL outbound delivery to this host:port (skips MX lookup).
 # Leave empty in production.

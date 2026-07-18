@@ -11,6 +11,11 @@ test("settings and events screens render", async ({ page }) => {
   await expect(page.getByText("mail.as135559.net.au").first()).toBeVisible(); // hostname
   await expect(page.getByRole("heading", { name: "Listeners" })).toBeVisible();
 
+  // TLS certificate (server hostname): hot-reload button works.
+  await expect(page.getByRole("heading", { name: "TLS certificate (server hostname)" })).toBeVisible();
+  await page.getByTestId("reload-tls").click();
+  await expect(page.getByText("Reloaded.")).toBeVisible();
+
   // Message retention: switch to count mode, set a limit, save.
   await expect(page.getByRole("heading", { name: "Message retention" })).toBeVisible();
   await page.getByLabel("Keep by count").check();

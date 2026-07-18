@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"relay/internal/certs"
 	"relay/internal/crypto"
 	"relay/internal/dns"
 	"relay/internal/storage"
@@ -48,6 +49,11 @@ type Server struct {
 	// when no runtime policy has been saved.
 	RetentionDefaultDays    int
 	RetentionDefaultEnabled bool
+
+	// TLS: manual/per-domain cert store (nil when TLS is off) and how the server
+	// cert is sourced ("acme" | "manual-file" | "self-signed" | "disabled").
+	CertStore *certs.CertStore
+	TLSSource string
 }
 
 // MetricsHandler is the Prometheus handler, exported so main can mount it on a
@@ -140,6 +146,12 @@ func (s *Server) Router() http.Handler {
 			r.Get("/server/info", s.handleServerInfo)
 			r.Get("/settings/retention", s.handleGetRetention)
 			r.Put("/settings/retention", s.handleSetRetention)
+			// TLS: server-hostname cert status + hot reload; per-domain certs.
+			r.Get("/settings/tls", s.handleGetServerTLS)
+			r.Post("/settings/tls/reload", s.handleReloadServerTLS)
+			r.Get("/domains/{id}/tls-cert", s.handleGetDomainTLS)
+			r.Put("/domains/{id}/tls-cert", s.handlePutDomainTLS)
+			r.Delete("/domains/{id}/tls-cert", s.handleDeleteDomainTLS)
 		})
 	})
 
