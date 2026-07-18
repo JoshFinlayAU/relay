@@ -56,6 +56,10 @@ test("onboard a domain end to end", async ({ page }) => {
   await page.getByTestId("save-expiry").click();
   await expect(page.getByText(/Currently 12h for this domain/)).toBeVisible();
 
+  // DMARC analyzer renders (empty state until reports arrive).
+  await expect(page.getByRole("heading", { name: "DMARC" })).toBeVisible();
+  await expect(page.getByText(/No DMARC aggregate reports yet/)).toBeVisible();
+
   // Delete with confirmation.
   await page.getByRole("button", { name: "Delete" }).click();
   const confirm = page.getByRole("dialog", { name: "confirm-delete" });

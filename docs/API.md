@@ -112,6 +112,29 @@ curl -sX PATCH https://$HOST/v1/domains/<id> \
   override and fall back to the server default (`delivery_max_age` in config).
   `GET /v1/domains/{id}` reports it (`null` = using the default).
 
+## DMARC analyzer
+
+Relay sets every domain's DMARC `rua` to `dmarc@<mail-host>` and ingests the
+aggregate (XML) reports mailbox providers send back. Per-domain analysis:
+
+```bash
+curl -s "https://$HOST/v1/domains/<id>/dmarc?window=30d" -H "Authorization: Bearer $KEY"
+```
+
+```json
+{
+  "window": "30d",
+  "summary": {"total":1420,"passed":1408,"dkim_pass":1400,"spf_pass":1290,"quarantined":8,"rejected":4},
+  "top_sources": [{"source_ip":"203.0.113.10","total":1200,"passed":1200}],
+  "reports":     [{"org_name":"google.com","date_end":"…","policy_p":"none","messages":420}]
+}
+```
+
+`passed` = messages where aligned DKIM **or** SPF passed. Operator setup (one
+time): publish `*._report._dmarc.<mail-host> TXT "v=DMARC1"` (shown in
+**Settings → Server DNS**) so external reporters are authorised to send reports
+to `dmarc@<mail-host>`.
+
 ## Send: create an SMTP credential
 
 Apps send via SMTP (587 STARTTLS / 465 implicit TLS) using per-app credentials.

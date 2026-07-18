@@ -18,8 +18,8 @@ func TestDeriveFromHostname(t *testing.T) {
 	if c.SPFInclude != "spf.mail.example.com" {
 		t.Errorf("SPFInclude = %q, want spf.mail.example.com", c.SPFInclude)
 	}
-	if c.DMARCRua != "mailto:dmarc@example.com" {
-		t.Errorf("DMARCRua = %q, want mailto:dmarc@example.com", c.DMARCRua)
+	if c.DMARCRua != "mailto:dmarc@mail.example.com" {
+		t.Errorf("DMARCRua = %q, want mailto:dmarc@mail.example.com", c.DMARCRua)
 	}
 
 	// Explicit values must be preserved (not overwritten).

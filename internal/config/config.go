@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"golang.org/x/net/publicsuffix"
 )
 
 // Config is the fully-resolved runtime configuration.
@@ -176,7 +175,9 @@ func (c *Config) derive() {
 		c.SPFInclude = "spf." + c.Hostname
 	}
 	if c.DMARCRua == "" && c.Hostname != "" {
-		c.DMARCRua = "mailto:dmarc@" + registrableDomain(c.Hostname)
+		// Aggregate reports come back to the mail host itself so Relay can ingest
+		// and analyse them (dmarc@<fqdn>).
+		c.DMARCRua = "mailto:dmarc@" + c.Hostname
 	}
 	if c.SendingIPv4 == "" {
 		c.SendingIPv4 = detectPublicIP(false)
@@ -184,15 +185,6 @@ func (c *Config) derive() {
 	if c.SendingIPv6 == "" {
 		c.SendingIPv6 = detectPublicIP(true)
 	}
-}
-
-// registrableDomain returns the eTLD+1 of host (mail.example.com -> example.com),
-// falling back to host itself when it isn't a normal public domain.
-func registrableDomain(host string) string {
-	if d, err := publicsuffix.EffectiveTLDPlusOne(host); err == nil {
-		return d
-	}
-	return host
 }
 
 // detectPublicIP returns the first globally-routable address bound to a local

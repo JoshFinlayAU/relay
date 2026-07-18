@@ -105,6 +105,7 @@ func (s *Server) Router() http.Handler {
 			r.Patch("/domains/{id}", s.handlePatchDomain)
 			r.Get("/domains/{id}/stats", s.handleDomainStats)
 			r.Get("/domains/{id}/stats/timeseries", s.handleDomainTimeseries)
+			r.Get("/domains/{id}/dmarc", s.handleDomainDMARC)
 			r.Post("/domains/{id}/test-send", s.handleTestSend)
 
 			// Credentials.

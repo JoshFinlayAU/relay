@@ -31,6 +31,12 @@ func (s *Server) serverDNSRecords() []map[string]string {
 			"value": "v=spf1 " + strings.Join(mech, " ") + " -all",
 		})
 	}
+	// DMARC external-destination authorisation: lets any domain send its
+	// aggregate reports to dmarc@<hostname> (RFC 7489 §7.1). Wildcard covers all.
+	recs = append(recs, map[string]string{
+		"purpose": "dmarc_report_auth", "type": "TXT",
+		"name": "*._report._dmarc." + s.Hostname, "value": "v=DMARC1",
+	})
 	return recs
 }
 

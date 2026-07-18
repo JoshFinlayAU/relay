@@ -35,6 +35,10 @@ type Querier interface {
 	CredentialCoversDomain(ctx context.Context, arg CredentialCoversDomainParams) (*bool, error)
 	// Windowed counts for a credential (since a cutoff timestamp).
 	CredentialStats(ctx context.Context, arg CredentialStatsParams) (CredentialStatsRow, error)
+	// Aggregate totals for a domain since a cutoff. DMARC "pass" = aligned DKIM OR
+	// aligned SPF passed.
+	DMARCSummary(ctx context.Context, arg DMARCSummaryParams) (DMARCSummaryRow, error)
+	DMARCTopSources(ctx context.Context, arg DMARCTopSourcesParams) ([]DMARCTopSourcesRow, error)
 	DeferJob(ctx context.Context, arg DeferJobParams) error
 	DeleteAdminUser(ctx context.Context, id uuid.UUID) error
 	DeleteCredential(ctx context.Context, id uuid.UUID) error
@@ -81,6 +85,7 @@ type Querier interface {
 	GrantCredentialDomain(ctx context.Context, arg GrantCredentialDomainParams) error
 	InsertBounceEvent(ctx context.Context, arg InsertBounceEventParams) (BounceEvent, error)
 	InsertDKIMKey(ctx context.Context, arg InsertDKIMKeyParams) (DkimKey, error)
+	InsertDMARCRow(ctx context.Context, arg InsertDMARCRowParams) error
 	InsertDeliveryAttempt(ctx context.Context, arg InsertDeliveryAttemptParams) error
 	InsertEvent(ctx context.Context, arg InsertEventParams) (Event, error)
 	InsertMessage(ctx context.Context, arg InsertMessageParams) (Message, error)
@@ -93,6 +98,7 @@ type Querier interface {
 	ListCredentialDomains(ctx context.Context, credentialID uuid.UUID) ([]Domain, error)
 	ListCredentialsByDomain(ctx context.Context, arg ListCredentialsByDomainParams) ([]Credential, error)
 	ListDKIMKeys(ctx context.Context, domainID uuid.UUID) ([]ListDKIMKeysRow, error)
+	ListDMARCReports(ctx context.Context, arg ListDMARCReportsParams) ([]ListDMARCReportsRow, error)
 	ListDNSRecords(ctx context.Context, domainID uuid.UUID) ([]DnsRecord, error)
 	ListDeliveryAttempts(ctx context.Context, messageID uuid.UUID) ([]DeliveryAttempt, error)
 	ListDomains(ctx context.Context, arg ListDomainsParams) ([]Domain, error)
@@ -139,6 +145,9 @@ type Querier interface {
 	UpdateDNSRecordResult(ctx context.Context, arg UpdateDNSRecordResultParams) error
 	UpdateDomainStatus(ctx context.Context, arg UpdateDomainStatusParams) (Domain, error)
 	UpdateMailboxWebhook(ctx context.Context, arg UpdateMailboxWebhookParams) (Mailbox, error)
+	// Idempotent per (domain, org, report_id). Returns (id, inserted?) — xmax=0
+	// means a fresh insert so the caller only adds rows for new reports.
+	UpsertDMARCReport(ctx context.Context, arg UpsertDMARCReportParams) (UpsertDMARCReportRow, error)
 	UpsertDNSRecord(ctx context.Context, arg UpsertDNSRecordParams) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	// Recompute one hourly per-domain bucket from source tables.

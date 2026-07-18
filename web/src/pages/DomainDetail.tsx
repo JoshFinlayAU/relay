@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteDomain, getDomain, patchDomain } from "../api/domains";
 import { Button, Card, PageHeader, StatusBadge, Switch } from "../components/ui";
 import Credentials from "../components/Credentials";
+import DmarcPanel from "../components/DmarcPanel";
 import Mailboxes from "../components/Mailboxes";
 import Suppressions from "../components/Suppressions";
 import DomainStats from "../components/DomainStats";
@@ -68,6 +69,9 @@ export default function DomainDetail() {
 
       {/* Statistics + test send */}
       <DomainStats domainId={id} />
+
+      {/* DMARC analyzer */}
+      <DmarcPanel domainId={id} />
 
       <Credentials domainId={id} domainName={domain.name} />
       <Mailboxes domainId={id} />

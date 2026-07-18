@@ -21,6 +21,7 @@ import (
 
 	"relay/internal/bounce"
 	"relay/internal/dkim"
+	"relay/internal/dmarc"
 	"relay/internal/storage"
 	"relay/internal/store"
 )
@@ -36,6 +37,8 @@ type Deps struct {
 	// are delegated to it so trusted networks can submit AUTH'd mail (CLAUDE.md).
 	Submission  smtp.Backend
 	AuthSubnets []*net.IPNet
+	// DMARC ingests aggregate reports sent to dmarc@<hostname>.
+	DMARC *dmarc.Ingester
 }
 
 // Backend is a go-smtp Backend for inbound mail (port 25).
@@ -78,7 +81,11 @@ type session struct {
 	bounceFor *store.Message // original message a bounce recipient maps to
 	mailbox   *store.Mailbox // matched inbound mailbox (non-bounce)
 	inRcpt    string         // recipient address for a mailbox delivery
+	isDMARC   bool           // recipient is dmarc@<hostname> (aggregate report)
 }
+
+// dmarcAddr is the mailbox that receives aggregate reports.
+func (s *session) dmarcAddr() string { return "dmarc@" + strings.ToLower(s.deps.Hostname) }
 
 func (s *session) Mail(from string, _ *smtp.MailOptions) error {
 	// Bounces frequently use the null sender <>; accept anything here - the RCPT
@@ -116,7 +123,13 @@ func (s *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 		return nil
 	}
 
-	// (b) Mailbox recipient on a receiving-enabled domain (exact or catch-all).
+	// (b) DMARC aggregate reports to dmarc@<hostname>.
+	if s.deps.DMARC != nil && to == s.dmarcAddr() {
+		s.isDMARC = true
+		return nil
+	}
+
+	// (c) Mailbox recipient on a receiving-enabled domain (exact or catch-all).
 	local, domName := splitAddr(to)
 	if domName == "" {
 		return reject
@@ -135,7 +148,7 @@ func (s *session) Rcpt(to string, _ *smtp.RcptOptions) error {
 }
 
 func (s *session) Data(r io.Reader) error {
-	if s.bounceFor == nil && s.mailbox == nil {
+	if s.bounceFor == nil && s.mailbox == nil && !s.isDMARC {
 		return &smtp.SMTPError{Code: 503, EnhancedCode: smtp.EnhancedCode{5, 5, 1}, Message: "bad sequence"}
 	}
 	ctx := context.Background()
@@ -146,6 +159,15 @@ func (s *session) Data(r io.Reader) error {
 	raw, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil || int64(len(raw)) > limit {
 		return &smtp.SMTPError{Code: 552, EnhancedCode: smtp.EnhancedCode{5, 3, 4}, Message: "message too large"}
+	}
+
+	if s.isDMARC {
+		if n, err := s.deps.DMARC.Ingest(ctx, raw); err != nil {
+			s.deps.Log.Warn("dmarc ingest", "err", err)
+		} else {
+			s.deps.Log.Info("dmarc reports ingested", "count", n)
+		}
+		return nil // always accept the report so senders don't retry
 	}
 
 	if s.mailbox != nil {

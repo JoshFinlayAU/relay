@@ -62,6 +62,7 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 |---|---|---|---|---|
 | `/v1/domains/{id}/stats` | GET | DomainDetail → DomainStats (tiles) | `e2e/system.spec.ts` | ✅ |
 | `/v1/domains/{id}/stats/timeseries` | GET | DomainStats (Recharts area chart) | `e2e/system.spec.ts` | ✅ |
+| `/v1/domains/{id}/dmarc` | GET | DomainDetail → `DmarcPanel` (analyzer) | `e2e/domains.spec.ts` | ✅ |
 | `/v1/credentials/{id}/stats` | GET | Credentials → `CredentialStats` (per-credential chart) | `e2e/credentials.spec.ts` | ✅ |
 | `/v1/domains/{id}/test-send` | POST | DomainStats (Test send) | `e2e/system.spec.ts` | ✅ |
 | `/v1/messages` (`after`/`before`/`rcpt`) | GET | Messages (recipient search) | `e2e/messages.spec.ts` | ✅ |

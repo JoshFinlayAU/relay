@@ -26,6 +26,7 @@ import (
 	"relay/internal/config"
 	"relay/internal/crypto"
 	"relay/internal/delivery"
+	"relay/internal/dmarc"
 	"relay/internal/dns"
 	"relay/internal/retention"
 	smtpin "relay/internal/smtp/inbound"
@@ -275,6 +276,7 @@ func run() error {
 		inb := smtpin.New(smtpin.Deps{
 			Store: st, Blobs: blobs, Log: logger, Hostname: cfg.Hostname, MaxMessageBytes: cfg.MaxMessageBytes,
 			Submission: subBackend, AuthSubnets: parseCIDRs(cfg.Port25AuthSubnets, logger),
+			DMARC: &dmarc.Ingester{Store: st, Blobs: blobs, Log: logger},
 		})
 		srv25 := smtpin.NewServer(cfg.InboundAddr, cfg.Hostname, inb, smtpTLS, cfg.MaxMessageBytes)
 		smtpServers = append(smtpServers, srv25)

@@ -111,6 +111,32 @@ type DkimKey struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+type DmarcReport struct {
+	ID         uuid.UUID          `json:"id"`
+	DomainID   uuid.UUID          `json:"domain_id"`
+	OrgName    string             `json:"org_name"`
+	ReportID   string             `json:"report_id"`
+	DateBegin  pgtype.Timestamptz `json:"date_begin"`
+	DateEnd    pgtype.Timestamptz `json:"date_end"`
+	PolicyP    *string            `json:"policy_p"`
+	PolicyPct  *int32             `json:"policy_pct"`
+	RawRef     *string            `json:"raw_ref"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+}
+
+type DmarcReportRow struct {
+	ID           uuid.UUID          `json:"id"`
+	ReportID     uuid.UUID          `json:"report_id"`
+	DomainID     uuid.UUID          `json:"domain_id"`
+	SourceIp     string             `json:"source_ip"`
+	MessageCount int32              `json:"message_count"`
+	Disposition  string             `json:"disposition"`
+	DkimResult   string             `json:"dkim_result"`
+	SpfResult    string             `json:"spf_result"`
+	HeaderFrom   *string            `json:"header_from"`
+	RowEnd       pgtype.Timestamptz `json:"row_end"`
+}
+
 type DnsRecord struct {
 	ID            uuid.UUID          `json:"id"`
 	DomainID      uuid.UUID          `json:"domain_id"`
