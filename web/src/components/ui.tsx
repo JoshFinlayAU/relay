@@ -1,4 +1,4 @@
-import { ButtonHTMLAttributes, ReactNode } from "react";
+import { ButtonHTMLAttributes, ReactNode, useState } from "react";
 import { cn } from "../lib/utils";
 import type { CheckResult, DomainStatus } from "../api/domains";
 
@@ -180,15 +180,37 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
   );
 }
 
-export function CopyButton({ text }: { text: string }) {
+// CopyButton is a compact icon button that copies `text` and briefly shows a
+// check on success.
+export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard
+      ?.writeText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      })
+      .catch(() => {});
+  };
   return (
-    <Button
-      variant="ghost"
-      className="px-2.5 py-1 text-xs"
-      title="Copy"
-      onClick={() => void navigator.clipboard?.writeText(text).catch(() => {})}
+    <button
+      type="button"
+      onClick={copy}
+      title={label}
+      aria-label={label}
+      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
     >
-      Copy
-    </Button>
+      {copied ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="11" height="11" rx="2" />
+          <path d="M5 15V5a2 2 0 012-2h10" />
+        </svg>
+      )}
+    </button>
   );
 }

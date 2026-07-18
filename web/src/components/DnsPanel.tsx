@@ -105,11 +105,12 @@ export default function DnsPanel({ domainId }: { domainId: string }) {
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">name</span>
                   <span className="break-all">{r.name}</span>
+                  <CopyButton text={r.name} label="Copy name" />
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-muted-foreground">value</span>
                   <span className="break-all text-foreground/90">{r.value}</span>
-                  <CopyButton text={r.value} />
+                  <CopyButton text={r.value} label="Copy value" />
                 </div>
               </div>
               {r.conflict && r.merged_value && (

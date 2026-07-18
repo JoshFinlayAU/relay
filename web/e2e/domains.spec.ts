@@ -39,7 +39,7 @@ test("onboard a domain end to end", async ({ page }) => {
   // published yet, so it's not asserted here — it depends on live DNS.)
 
   // Copy buttons exist.
-  await expect(page.getByRole("button", { name: "Copy" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy value" }).first()).toBeVisible();
 
   // Toggle receiving → inbound MX record appears after the PATCH refetch.
   await page.getByRole("checkbox", { name: "Inbound receiving" }).click();
