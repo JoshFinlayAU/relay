@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMessage, getMessageRaw } from "../api/messages";
+import { getMessage, getMessageBody, getMessageRaw } from "../api/messages";
 import { redeliverWebhook } from "../api/mailboxes";
 import { Button, Card } from "../components/ui";
 import { cn } from "../lib/utils";
@@ -128,6 +128,8 @@ export default function MessageDetail() {
         </div>
       )}
 
+      <MessageBodyView id={id} />
+
       <RawHeaders id={id} />
 
       {data.bounces.length > 0 && (
@@ -152,6 +154,80 @@ export default function MessageDetail() {
             </Card>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function MessageBodyView({ id }: { id: string }) {
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"rendered" | "source">("rendered");
+  const q = useQuery({
+    queryKey: ["message-body", id],
+    queryFn: () => getMessageBody(id),
+    enabled: open,
+    retry: false,
+  });
+  const b = q.data;
+  const hasHTML = !!b?.html;
+  const hasText = !!b?.text;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Body</h2>
+        <Button variant="secondary" data-testid="body-toggle" onClick={() => setOpen((v) => !v)}>
+          {open ? "Hide" : "View body"}
+        </Button>
+      </div>
+      {open && (
+        <Card className="space-y-3 p-4">
+          {q.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {q.isError && <p className="text-sm text-muted-foreground">{(q.error as Error).message}</p>}
+          {b && !hasHTML && !hasText && (
+            <p className="text-sm text-muted-foreground">No text or HTML body (may be attachments only).</p>
+          )}
+
+          {hasHTML && (
+            <div className="flex gap-2 text-xs">
+              <button
+                onClick={() => setView("rendered")}
+                className={cn("rounded px-2 py-0.5", view === "rendered" ? "bg-white/10 text-foreground" : "text-muted-foreground")}
+              >
+                Rendered
+              </button>
+              <button
+                onClick={() => setView("source")}
+                className={cn("rounded px-2 py-0.5", view === "source" ? "bg-white/10 text-foreground" : "text-muted-foreground")}
+              >
+                HTML source
+              </button>
+            </div>
+          )}
+
+          {hasHTML && view === "rendered" ? (
+            // Untrusted inbound HTML: sandboxed iframe, no scripts / same-origin.
+            <iframe
+              title="message-html"
+              sandbox=""
+              srcDoc={b!.html}
+              className="h-96 w-full rounded-lg border border-border bg-white"
+            />
+          ) : hasHTML && view === "source" ? (
+            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 font-mono text-xs">{b!.html}</pre>
+          ) : hasText ? (
+            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-background p-3 text-sm">{b!.text}</pre>
+          ) : null}
+
+          {b && b.attachments.length > 0 && (
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <div className="font-medium uppercase tracking-wider">Attachments</div>
+              {b.attachments.map((a, i) => (
+                <div key={i} className="font-mono">{a.filename || "(unnamed)"} · {a.content_type} · {a.size} bytes</div>
+              ))}
+            </div>
+          )}
+        </Card>
       )}
     </div>
   );

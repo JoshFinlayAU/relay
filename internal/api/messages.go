@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"relay/internal/store"
+	"relay/internal/webhook"
 )
 
 func uuidStr(id *uuid.UUID) *string {
@@ -220,6 +221,43 @@ func (s *Server) handleGetMessageRaw(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(headers)
+}
+
+// handleGetMessageBody returns the parsed message body (text + HTML) and
+// attachment metadata. Best-effort: 404 once the stored body is gone (retention).
+func (s *Server) handleGetMessageBody(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		errBadRequest(w, "invalid_id", "id must be a UUID")
+		return
+	}
+	m, err := s.Store.GetMessage(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		errNotFound(w, "message not found")
+		return
+	}
+	if err != nil {
+		errInternal(w, s.Log, "get message", err)
+		return
+	}
+	if m.BodyRef == nil {
+		errNotFound(w, "message body no longer available (retention)")
+		return
+	}
+	raw, err := s.Blobs.Get(*m.BodyRef)
+	if err != nil {
+		errNotFound(w, "message body no longer available (retention)")
+		return
+	}
+	p := webhook.BuildPayload(raw, s.Blobs)
+	// Return body + attachment metadata only (no attachment content).
+	atts := make([]map[string]any, 0, len(p.Attachments))
+	for _, a := range p.Attachments {
+		atts = append(atts, map[string]any{"filename": a.Filename, "content_type": a.ContentType, "size": a.Size})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"text": p.Text, "html": p.HTML, "attachments": atts,
+	})
 }
 
 // handleStatsOverview powers the dashboard.

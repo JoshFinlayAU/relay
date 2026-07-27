@@ -139,6 +139,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/messages", s.handleListMessages)
 			r.Get("/messages/{id}", s.handleGetMessage)
 			r.Get("/messages/{id}/raw", s.handleGetMessageRaw)
+			r.Get("/messages/{id}/body", s.handleGetMessageBody)
 			r.Get("/stats/overview", s.handleStatsOverview)
 
 			// Events + settings.

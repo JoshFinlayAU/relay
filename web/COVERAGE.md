@@ -36,6 +36,7 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 | `/v1/messages` | GET | Messages (list + status/direction filters) | `e2e/messages.spec.ts` | ✅ |
 | `/v1/messages/{id}` | GET | MessageDetail (delivery timeline) | `e2e/messages.spec.ts` | ✅ |
 | `/v1/messages/{id}/raw` | GET | MessageDetail → `RawHeaders` (view raw headers) | `e2e/system.spec.ts` | ✅ |
+| `/v1/messages/{id}/body` | GET | MessageDetail → `MessageBodyView` (text/HTML body) | `e2e/system.spec.ts` | ✅ |
 | `/v1/stats/overview` | GET | Dashboard (queue depth, status counts, events) | `e2e/messages.spec.ts` | ✅ |
 | `/v1/domains/{id}/suppressions` | GET | DomainDetail → Suppressions | `e2e/suppressions.spec.ts` | ✅ |
 | `/v1/domains/{id}/suppressions` | POST | DomainDetail → Suppressions (add) | `e2e/suppressions.spec.ts` | ✅ |

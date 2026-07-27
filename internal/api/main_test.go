@@ -16,6 +16,10 @@ import (
 
 var testStore *store.Store
 
+// testBlobs is the blob store of the most recent newTestServer (for tests that
+// need to seed a stored message body).
+var testBlobs *storage.Store
+
 const testToken = "test_token_123"
 
 func TestMain(m *testing.M) {
@@ -79,6 +83,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	testBlobs = blobs
 	srv := &Server{
 		Store:       testStore,
 		Log:         slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),

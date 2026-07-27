@@ -67,6 +67,16 @@ export function getStatsOverview(): Promise<StatsOverview> {
   return api("/v1/stats/overview");
 }
 
+export interface MessageBody {
+  text: string;
+  html: string;
+  attachments: { filename: string; content_type: string; size: number }[];
+}
+
+export function getMessageBody(id: string): Promise<MessageBody> {
+  return api(`/v1/messages/${id}/body`);
+}
+
 // Raw headers are served as text/plain (not JSON), so fetch directly.
 export async function getMessageRaw(id: string): Promise<string> {
   const token = getToken();

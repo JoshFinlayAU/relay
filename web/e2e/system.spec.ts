@@ -58,5 +58,9 @@ test("domain stats panel and test-send", async ({ page }) => {
   await page.getByTestId("raw-headers-toggle").click();
   await expect(page.getByText(/^DKIM-Signature:/m)).toBeVisible();
 
+  // Message body view shows the parsed text body.
+  await page.getByTestId("body-toggle").click();
+  await expect(page.getByText(/This is a Relay test message/)).toBeVisible();
+
   expect(errors(), errors().join("\n")).toEqual([]);
 });
