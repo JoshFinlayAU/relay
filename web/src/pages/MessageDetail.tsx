@@ -220,10 +220,20 @@ function MessageBodyView({ id }: { id: string }) {
           ) : null}
 
           {b && b.attachments.length > 0 && (
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <div className="font-medium uppercase tracking-wider">Attachments</div>
+            <div className="space-y-1.5 text-xs">
+              <div className="font-medium uppercase tracking-wider text-muted-foreground">Attachments</div>
               {b.attachments.map((a, i) => (
-                <div key={i} className="font-mono">{a.filename || "(unnamed)"} · {a.content_type} · {a.size} bytes</div>
+                <div key={i} className="flex items-center gap-2">
+                  <a
+                    href={a.url}
+                    download={a.filename || undefined}
+                    data-testid="attachment-download"
+                    className="font-mono text-primary hover:underline"
+                  >
+                    {a.filename || "(unnamed)"}
+                  </a>
+                  <span className="text-muted-foreground">· {a.content_type} · {formatBytes(a.size)}</span>
+                </div>
               ))}
             </div>
           )}
@@ -272,4 +282,10 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
       <div className={cn("break-all", mono && "font-mono text-xs")}>{value}</div>
     </div>
   );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }

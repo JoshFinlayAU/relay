@@ -301,9 +301,14 @@ func run() error {
 	}
 
 	// Webhook dispatcher (delivers inbound-mail webhooks with retries).
+	webhookBase := "https://" + cfg.Hostname
+	if !cfg.TLSEnabled {
+		webhookBase = fmt.Sprintf("http://%s%s", cfg.Hostname, cfg.HTTPAddr)
+	}
 	dispatcher := &webhook.Dispatcher{
 		Store: st, Blobs: blobs, Sealer: sealer, Log: logger,
 		Schedule: cfg.WebhookRetrySchedule, MaxAge: cfg.WebhookMaxAge,
+		PublicBaseURL: webhookBase,
 		Metrics: webhook.Metrics{
 			Delivered:  promauto.NewCounter(prometheus.CounterOpts{Name: "relay_webhooks_delivered_total", Help: "Webhooks delivered."}),
 			DeadLetter: promauto.NewCounter(prometheus.CounterOpts{Name: "relay_webhooks_dead_letter_total", Help: "Webhooks dead-lettered."}),

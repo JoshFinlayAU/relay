@@ -5,13 +5,41 @@ package webhook
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"strings"
 
 	"github.com/emersion/go-message/mail"
 
+	"relay/internal/crypto"
 	"relay/internal/storage"
 )
+
+// AttachmentURLTTLSeconds is how long a signed attachment URL stays valid.
+const AttachmentURLTTLSeconds = 7 * 24 * 3600
+
+// attachmentSignMsg is the canonical string signed for an attachment URL.
+func attachmentSignMsg(msgID string, index int, exp int64) string {
+	return fmt.Sprintf("att:%s:%d:%d", msgID, index, exp)
+}
+
+// SignedAttachmentURL builds a self-authenticating download URL for one
+// attachment: <base>/v1/messages/{id}/attachments/{index}?exp=&sig=. The
+// signature (HMAC via the sealer) lets a webhook receiver fetch it without an
+// API token.
+func SignedAttachmentURL(sealer *crypto.Sealer, baseURL, msgID string, index int, exp int64) string {
+	sig := sealer.SignHex(attachmentSignMsg(msgID, index, exp))
+	return fmt.Sprintf("%s/v1/messages/%s/attachments/%d?exp=%d&sig=%s",
+		strings.TrimRight(baseURL, "/"), msgID, index, exp, sig)
+}
+
+// VerifyAttachmentSig validates a signed attachment URL's exp+sig.
+func VerifyAttachmentSig(sealer *crypto.Sealer, msgID string, index int, exp, now int64, sig string) bool {
+	if exp < now {
+		return false
+	}
+	return sealer.VerifyHex(attachmentSignMsg(msgID, index, exp), sig)
+}
 
 // InlineAttachmentLimit is the max attachment size embedded as base64 inline;
 // larger attachments are stored and referenced.
@@ -19,11 +47,13 @@ const InlineAttachmentLimit = 256 * 1024
 
 // Attachment is one MIME attachment in the webhook payload.
 type Attachment struct {
+	Index       int    `json:"index"` // stable position in the message
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`
 	Size        int    `json:"size"`
-	Content     string `json:"content,omitempty"` // base64, when inline
+	Content     string `json:"content,omitempty"` // base64, when inline (small)
 	Ref         string `json:"ref,omitempty"`     // storage ref, when too large to inline
+	RefURL      string `json:"ref_url,omitempty"` // signed download URL for a ref'd attachment
 }
 
 // Payload is the JSON body POSTed to a mailbox webhook (CLAUDE.md schema).
@@ -94,7 +124,7 @@ func BuildPayload(raw []byte, blobs *storage.Store) Payload {
 			ct, _, _ := hdr.ContentType()
 			filename, _ := hdr.Filename()
 			body, _ := io.ReadAll(part.Body)
-			att := Attachment{Filename: filename, ContentType: ct, Size: len(body)}
+			att := Attachment{Index: len(p.Attachments), Filename: filename, ContentType: ct, Size: len(body)}
 			if len(body) <= InlineAttachmentLimit {
 				att.Content = base64.StdEncoding.EncodeToString(body)
 			} else if blobs != nil {
@@ -106,4 +136,43 @@ func BuildPayload(raw []byte, blobs *storage.Store) Payload {
 		}
 	}
 	return p
+}
+
+// ExtractedAttachment is a single attachment's decoded bytes + metadata.
+type ExtractedAttachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
+// ExtractAttachment reparses raw and returns the attachment at index (0-based),
+// matching the ordering BuildPayload uses. ok is false if there is no such
+// attachment or the message can't be parsed.
+func ExtractAttachment(raw []byte, index int) (*ExtractedAttachment, bool) {
+	mr, err := mail.CreateReader(bytes.NewReader(raw))
+	if err != nil {
+		return nil, false
+	}
+	n := 0
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			break
+		}
+		hdr, ok := part.Header.(*mail.AttachmentHeader)
+		if !ok {
+			continue
+		}
+		if n == index {
+			ct, _, _ := hdr.ContentType()
+			filename, _ := hdr.Filename()
+			data, _ := io.ReadAll(part.Body)
+			return &ExtractedAttachment{Filename: filename, ContentType: ct, Data: data}, true
+		}
+		n++
+	}
+	return nil, false
 }

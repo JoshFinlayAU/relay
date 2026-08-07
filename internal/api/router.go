@@ -83,6 +83,9 @@ func (s *Server) Router() http.Handler {
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/ping", s.handlePing)
 		r.Post("/auth/login", s.handleLogin) // unauthenticated
+		// Attachment download self-authenticates (signed URL) or accepts a bearer
+		// token, so it lives outside the requireAuth group.
+		r.Get("/messages/{id}/attachments/{index}", s.handleGetAttachment)
 
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {

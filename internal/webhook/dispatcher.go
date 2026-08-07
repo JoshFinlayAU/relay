@@ -48,6 +48,10 @@ type Dispatcher struct {
 	Schedule []time.Duration
 	MaxAge   time.Duration
 
+	// PublicBaseURL is the externally-reachable base (e.g. https://mail.example)
+	// used to build signed attachment download URLs in the payload.
+	PublicBaseURL string
+
 	poll time.Duration
 }
 
@@ -111,6 +115,16 @@ func (d *Dispatcher) deliver(ctx context.Context, wd store.WebhookDelivery) {
 	}
 	if msg.DkimResult != nil {
 		payload.DKIMResult = *msg.DkimResult
+	}
+	// Large (non-inline) attachments get a signed download URL so receivers can
+	// fetch them; inline ones already carry base64 content.
+	if d.PublicBaseURL != "" && d.Sealer != nil {
+		exp := nowUnix() + AttachmentURLTTLSeconds
+		for i := range payload.Attachments {
+			if payload.Attachments[i].Content == "" {
+				payload.Attachments[i].RefURL = SignedAttachmentURL(d.Sealer, d.PublicBaseURL, payload.MessageID, payload.Attachments[i].Index, exp)
+			}
+		}
 	}
 	body, _ := json.Marshal(payload)
 

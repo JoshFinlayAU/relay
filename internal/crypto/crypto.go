@@ -6,8 +6,11 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -16,9 +19,12 @@ import (
 // ErrKeyLen is returned when the configured key is not 32 bytes.
 var ErrKeyLen = errors.New("secret key must be 32 bytes (base64-encoded)")
 
-// Sealer encrypts and decrypts small secrets with a fixed AES-256-GCM key.
+// Sealer encrypts and decrypts small secrets with a fixed AES-256-GCM key, and
+// signs short-lived URL tokens with a domain-separated HMAC key derived from the
+// same secret.
 type Sealer struct {
-	aead cipher.AEAD
+	aead    cipher.AEAD
+	hmacKey []byte
 }
 
 // NewSealer builds a Sealer from a base64-encoded 32-byte key.
@@ -38,7 +44,28 @@ func NewSealer(keyB64 string) (*Sealer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Sealer{aead: aead}, nil
+	// Domain-separated HMAC key so URL signing never uses the AES key directly.
+	hk := hmac.New(sha256.New, key)
+	hk.Write([]byte("relay-url-signing-v1"))
+	return &Sealer{aead: aead, hmacKey: hk.Sum(nil)}, nil
+}
+
+// SignHex returns the hex HMAC-SHA256 of msg (for signed URLs / tokens).
+func (s *Sealer) SignHex(msg string) string {
+	m := hmac.New(sha256.New, s.hmacKey)
+	m.Write([]byte(msg))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// VerifyHex reports whether sigHex is a valid signature for msg (constant-time).
+func (s *Sealer) VerifyHex(msg, sigHex string) bool {
+	want, err := hex.DecodeString(sigHex)
+	if err != nil {
+		return false
+	}
+	m := hmac.New(sha256.New, s.hmacKey)
+	m.Write([]byte(msg))
+	return hmac.Equal(want, m.Sum(nil))
 }
 
 // Seal encrypts plaintext, returning nonce||ciphertext.

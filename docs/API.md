@@ -215,8 +215,17 @@ curl -sX DELETE https://$HOST/v1/mailboxes/<mid> -H "Authorization: Bearer $KEY"
 
 The webhook body is JSON `{message_id, from, to, subject, headers, text, html,
 attachments[], raw_size, spf_result, dkim_result}`, signed with
-`X-Relay-Signature: sha256=HMAC(secret, "<X-Relay-Timestamp>.<body>")`. Delivery
-log + manual re-fire:
+`X-Relay-Signature: sha256=HMAC(secret, "<X-Relay-Timestamp>.<body>")`.
+
+**Attachments** — each entry is `{index, filename, content_type, size, …}`:
+small ones (≤256 KB) arrive **inline** as base64 in `content`; larger ones carry
+a signed, time-limited **`ref_url`** you can `GET` directly (no API token needed)
+to download the raw bytes. The same download is available to API/UI callers at
+`GET /v1/messages/{id}/attachments/{index}` (accepts a bearer token or the signed
+`?exp=&sig=` query). URLs expire after 7 days; the attachment is available while
+the message body is retained.
+
+Delivery log + manual re-fire:
 
 ```bash
 curl -s https://$HOST/v1/domains/<id>/webhook-deliveries -H "Authorization: Bearer $KEY"

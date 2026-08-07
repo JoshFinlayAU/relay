@@ -67,10 +67,18 @@ export function getStatsOverview(): Promise<StatsOverview> {
   return api("/v1/stats/overview");
 }
 
+export interface MessageAttachment {
+  index: number;
+  filename: string;
+  content_type: string;
+  size: number;
+  url: string; // signed download URL
+}
+
 export interface MessageBody {
   text: string;
   html: string;
-  attachments: { filename: string; content_type: string; size: number }[];
+  attachments: MessageAttachment[];
 }
 
 export function getMessageBody(id: string): Promise<MessageBody> {

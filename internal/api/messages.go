@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,6 +16,19 @@ import (
 	"relay/internal/store"
 	"relay/internal/webhook"
 )
+
+// publicBaseURL builds the externally-reachable base for signed URLs: the
+// configured hostname over https when TLS is on, otherwise the request Host.
+func (s *Server) publicBaseURL(r *http.Request) string {
+	if s.TLSEnabled && s.Hostname != "" {
+		return "https://" + s.Hostname
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
 
 func uuidStr(id *uuid.UUID) *string {
 	if id == nil {
@@ -223,6 +238,86 @@ func (s *Server) handleGetMessageRaw(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(headers)
 }
 
+// handleGetAttachment streams a single attachment. Auth is EITHER a valid admin
+// bearer token (WebUI/API) OR a valid signed URL (exp+sig) — the latter lets a
+// webhook receiver download without an API token.
+func (s *Server) handleGetAttachment(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		errBadRequest(w, "invalid_id", "id must be a UUID")
+		return
+	}
+	index, err := strconv.Atoi(chi.URLParam(r, "index"))
+	if err != nil || index < 0 {
+		errBadRequest(w, "invalid_index", "index must be a non-negative integer")
+		return
+	}
+
+	// Authorise: signed URL first, then admin bearer.
+	authed := false
+	if sig := r.URL.Query().Get("sig"); sig != "" {
+		exp, _ := strconv.ParseInt(r.URL.Query().Get("exp"), 10, 64)
+		authed = webhook.VerifyAttachmentSig(s.Sealer, id.String(), index, exp, nowUnix(), sig)
+	}
+	if !authed {
+		if tok := bearerToken(r); tok == "" || !s.credentialValid(r, tok) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="relay"`)
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid credentials")
+			return
+		}
+	}
+
+	m, err := s.Store.GetMessage(r.Context(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		errNotFound(w, "message not found")
+		return
+	}
+	if err != nil {
+		errInternal(w, s.Log, "get message", err)
+		return
+	}
+	if m.BodyRef == nil {
+		errNotFound(w, "attachment no longer available (retention)")
+		return
+	}
+	raw, err := s.Blobs.Get(*m.BodyRef)
+	if err != nil {
+		errNotFound(w, "attachment no longer available (retention)")
+		return
+	}
+	att, ok := webhook.ExtractAttachment(raw, index)
+	if !ok {
+		errNotFound(w, "no such attachment")
+		return
+	}
+	ct := att.ContentType
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Length", strconv.Itoa(len(att.Data)))
+	if att.Filename != "" {
+		w.Header().Set("Content-Disposition", "attachment; filename=\""+sanitizeFilename(att.Filename)+"\"")
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(att.Data)
+}
+
+// sanitizeFilename strips characters that would break the Content-Disposition
+// header (quotes, CR/LF, path separators).
+func sanitizeFilename(name string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '"', '\\', '\r', '\n', '/':
+			return '_'
+		}
+		return r
+	}, name)
+}
+
+// nowUnix is overridable in tests.
+var nowUnix = func() int64 { return time.Now().Unix() }
+
 // handleGetMessageBody returns the parsed message body (text + HTML) and
 // attachment metadata. Best-effort: 404 once the stored body is gone (retention).
 func (s *Server) handleGetMessageBody(w http.ResponseWriter, r *http.Request) {
@@ -250,10 +345,14 @@ func (s *Server) handleGetMessageBody(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := webhook.BuildPayload(raw, s.Blobs)
-	// Return body + attachment metadata only (no attachment content).
+	// Return body + attachment metadata with a signed download URL each (usable
+	// directly by the browser, no bearer header needed).
+	base := s.publicBaseURL(r)
+	exp := nowUnix() + webhook.AttachmentURLTTLSeconds
 	atts := make([]map[string]any, 0, len(p.Attachments))
 	for _, a := range p.Attachments {
-		atts = append(atts, map[string]any{"filename": a.Filename, "content_type": a.ContentType, "size": a.Size})
+		url := webhook.SignedAttachmentURL(s.Sealer, base, m.ID.String(), a.Index, exp)
+		atts = append(atts, map[string]any{"index": a.Index, "filename": a.Filename, "content_type": a.ContentType, "size": a.Size, "url": url})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"text": p.Text, "html": p.HTML, "attachments": atts,
