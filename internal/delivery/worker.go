@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"strings"
@@ -153,7 +154,30 @@ func (p *Pool) process(ctx context.Context, job store.DeliveryJob) {
 	} else {
 		hosts, err := ResolveMX(ctx, p.Resolver, domain)
 		if err != nil || len(hosts) == 0 {
-			p.deferOrFail(ctx, job, msg.DomainID, 0, "no MX for "+domain)
+			// Distinguish a permanent no-destination (no MX + no A, or null MX)
+			// from a transient DNS failure. Record an attempt either way so the
+			// message's timeline reflects why it isn't moving.
+			permanent := errors.Is(err, ErrNoMailDestination)
+			resp := "no MX or address record for " + domain
+			code := 550 // 5.x: recipient domain does not accept mail
+			if !permanent {
+				code = 0
+				resp = "MX lookup failed for " + domain
+				if err != nil {
+					resp += ": " + err.Error()
+				}
+			}
+			res := Result{Permanent: permanent, Code: code, Response: resp}
+			p.record(ctx, job, res)
+			if permanent {
+				p.failJob(ctx, job, code, resp)
+			} else {
+				if p.Metrics.DeferByDomain != nil {
+					p.Metrics.DeferByDomain.WithLabelValues(domain).Inc()
+				}
+				p.deferOrFail(ctx, job, msg.DomainID, code, resp)
+			}
+			p.updateMessageStatus(ctx, job.MessageID)
 			return
 		}
 		in.MXHosts = hosts
