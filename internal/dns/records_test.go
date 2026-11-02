@@ -61,6 +61,33 @@ func TestPlanRecordsReceiving(t *testing.T) {
 	}
 }
 
+func TestPlanRecordsConfiguredNames(t *testing.T) {
+	p := testParams()
+	p.VerifyRecord = "_mail-verify"
+	p.VerifyValuePrefix = "mail-verify"
+	recs := PlanRecords("voxteam.app", "tok123", "mx2026a", "PUBKEY", false, p)
+	for _, r := range recs {
+		if strings.Contains(r.Name, "relay") || strings.Contains(r.Value, "relay") {
+			t.Errorf("%s record still names relay: %s %s", r.Purpose, r.Name, r.Value)
+		}
+		if r.Purpose != PurposeOwnership {
+			continue
+		}
+		if r.Name != "_mail-verify.voxteam.app" {
+			t.Errorf("ownership name %q", r.Name)
+		}
+		if r.Value != "mail-verify=tok123" {
+			t.Errorf("ownership value %q", r.Value)
+		}
+	}
+	if got := p.OwnershipName("voxteam.app"); got != "_mail-verify.voxteam.app" {
+		t.Errorf("OwnershipName = %q", got)
+	}
+	if got := p.OwnershipValue("tok123"); got != "mail-verify=tok123" {
+		t.Errorf("OwnershipValue = %q", got)
+	}
+}
+
 func TestZoneLine(t *testing.T) {
 	txt := RecordSpec{Type: "TXT", Name: "_dmarc.voxteam.app", Value: "v=DMARC1; p=none"}
 	if got := txt.ZoneLine(); got != `_dmarc.voxteam.app. IN TXT "v=DMARC1; p=none"` {

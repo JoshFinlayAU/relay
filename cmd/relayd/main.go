@@ -90,7 +90,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("secret key: %w", err)
 	}
-	dnsParams := dns.Params{Hostname: cfg.Hostname, SPFInclude: cfg.SPFInclude, DMARCRua: cfg.DMARCRua}
+	dnsParams := dns.Params{
+		Hostname: cfg.Hostname, SPFInclude: cfg.SPFInclude, DMARCRua: cfg.DMARCRua,
+		VerifyRecord: cfg.VerifyRecord, VerifyValuePrefix: cfg.VerifyValuePrefix,
+		DKIMSelectorPrefix: cfg.DKIMSelectorPrefix,
+	}
 	verifier := dns.NewVerifier(dnsParams, cfg.DNSResolvers)
 
 	if err := api.SeedAdminUser(ctx, st, cfg.AdminUser, cfg.AdminPassword); err != nil {

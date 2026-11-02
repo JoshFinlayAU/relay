@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
+
+	"relay/internal/dns"
 )
 
 // do is a small authenticated request helper. It fully reads and closes the
@@ -152,6 +155,47 @@ func TestCreateDomainFlow(t *testing.T) {
 	if status != http.StatusNotFound {
 		t.Errorf("get after delete = %d, want 404", status)
 	}
+}
+
+func TestCreateDomainConfiguredNames(t *testing.T) {
+	ts := newTestServerWith(t, func(p *dns.Params) {
+		p.VerifyRecord = "_mail-verify"
+		p.VerifyValuePrefix = "mail-verify"
+		p.DKIMSelectorPrefix = "mx"
+	})
+
+	status, out := do(t, "POST", ts.URL+"/v1/domains", testToken, map[string]any{"name": "example.com"})
+	if status != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201 (%v)", status, out)
+	}
+	id := out["domain"].(map[string]any)["id"].(string)
+	check := func(where string, recs []any) {
+		t.Helper()
+		for _, r := range recs {
+			rm := r.(map[string]any)
+			name, value := rm["name"].(string), rm["value"].(string)
+			if bytesContains(name, "relay") || bytesContains(value, "relay") {
+				t.Errorf("%s: %v record still names relay: %s %s", where, rm["purpose"], name, value)
+			}
+			switch rm["purpose"] {
+			case "ownership":
+				if name != "_mail-verify.example.com" || !strings.HasPrefix(value, "mail-verify=") {
+					t.Errorf("%s: ownership %s %s", where, name, value)
+				}
+			case "dkim":
+				if !strings.HasPrefix(name, "mx") || !strings.HasSuffix(name, "a._domainkey.example.com") {
+					t.Errorf("%s: dkim name %s", where, name)
+				}
+			}
+		}
+	}
+	check("create", out["dns"].([]any))
+
+	status, out = do(t, "GET", ts.URL+"/v1/domains/"+id+"/dns", testToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get dns status = %d", status)
+	}
+	check("get dns", out["instructions"].([]any))
 }
 
 func TestGetUnknownDomain(t *testing.T) {

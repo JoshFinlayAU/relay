@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -82,6 +83,14 @@ type Config struct {
 	SendingIPv4  string   `toml:"sending_ipv4"`  // public IPv4 used for sending (SPF authority)
 	SendingIPv6  string   `toml:"sending_ipv6"`  // public IPv6 used for sending
 	DNSResolvers []string `toml:"dns_resolvers"` // bootstrap resolvers for NS discovery (host:port)
+
+	// Names customers publish in their own DNS (white label). Empty ⇒ built-in
+	// "_relay-verify", "relay-verify" and "rly". Set them before onboarding: after a
+	// change, existing domains must publish the new ownership record or the
+	// reverifier marks them degraded. Existing DKIM keys keep their selectors.
+	VerifyRecord       string `toml:"verify_record"`        // ownership TXT label, e.g. "_mail-verify"
+	VerifyValuePrefix  string `toml:"verify_value_prefix"`  // ownership TXT value is "<prefix>=<token>"
+	DKIMSelectorPrefix string `toml:"dkim_selector_prefix"` // new DKIM keys get "<prefix><year>a"
 
 	// Timers.
 	DNSReverifyInterval time.Duration `toml:"dns_reverify_interval"`
@@ -238,6 +247,9 @@ func (c *Config) applyEnv() {
 	setStr("RELAY_DMARC_RUA", &c.DMARCRua)
 	setStr("RELAY_SENDING_IPV4", &c.SendingIPv4)
 	setStr("RELAY_SENDING_IPV6", &c.SendingIPv6)
+	setStr("RELAY_VERIFY_RECORD", &c.VerifyRecord)
+	setStr("RELAY_VERIFY_VALUE_PREFIX", &c.VerifyValuePrefix)
+	setStr("RELAY_DKIM_SELECTOR_PREFIX", &c.DKIMSelectorPrefix)
 	if v, ok := os.LookupEnv("RELAY_DNS_RESOLVERS"); ok {
 		c.DNSResolvers = splitAndTrim(v)
 	}
@@ -328,6 +340,14 @@ func splitAndTrim(s string) []string {
 	return out
 }
 
+// Shapes for the customer-facing DNS names: one DNS label; a TXT value prefix
+// with no '=', space or quote; a selector start that leaves room for the year.
+var (
+	verifyRecordRe   = regexp.MustCompile(`^[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9])?$`)
+	verifyPrefixRe   = regexp.MustCompile(`^[A-Za-z0-9._-]{1,63}$`)
+	selectorPrefixRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,49}$`)
+)
+
 // Validate checks that required fields are present and coherent.
 func (c *Config) Validate() error {
 	if c.Hostname == "" {
@@ -346,6 +366,15 @@ func (c *Config) Validate() error {
 	case "debug", "info", "warn", "error":
 	default:
 		return fmt.Errorf("invalid log_level %q", c.LogLevel)
+	}
+	if c.VerifyRecord != "" && !verifyRecordRe.MatchString(c.VerifyRecord) {
+		return fmt.Errorf("invalid verify_record %q: one DNS label of letters, digits, '-' or '_'", c.VerifyRecord)
+	}
+	if c.VerifyValuePrefix != "" && !verifyPrefixRe.MatchString(c.VerifyValuePrefix) {
+		return fmt.Errorf("invalid verify_value_prefix %q: letters, digits, '.', '-' or '_'", c.VerifyValuePrefix)
+	}
+	if c.DKIMSelectorPrefix != "" && !selectorPrefixRe.MatchString(c.DKIMSelectorPrefix) {
+		return fmt.Errorf("invalid dkim_selector_prefix %q: lowercase letters, digits or '-', starting with a letter, at most 50", c.DKIMSelectorPrefix)
 	}
 	return nil
 }

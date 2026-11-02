@@ -81,7 +81,7 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		errInternal(w, s.Log, "gen token", err)
 		return
 	}
-	selector := dkim.Selector(time.Now().UTC().Year(), "a")
+	selector := dkim.Selector(s.Params.DKIMSelectorPrefix, time.Now().UTC().Year(), "a")
 	kp, err := dkim.Generate(selector)
 	if err != nil {
 		errInternal(w, s.Log, "dkim generate", err)

@@ -191,11 +191,11 @@ func (v *Verifier) Verify(ctx context.Context, in VerifyInput) ([]RecordResult, 
 
 func (v *Verifier) checkOwnership(ctx context.Context, servers []string, in VerifyInput) RecordResult {
 	r := RecordResult{Purpose: PurposeOwnership}
-	msg, err := v.authQuery(ctx, servers, OwnershipName(in.Domain), dns.TypeTXT)
+	msg, err := v.authQuery(ctx, servers, v.params.OwnershipName(in.Domain), dns.TypeTXT)
 	if err != nil {
 		return fail(r, "", "query failed: "+err.Error())
 	}
-	want := OwnershipValue(in.Token)
+	want := v.params.OwnershipValue(in.Token)
 	for _, t := range txtStrings(msg) {
 		if strings.TrimSpace(t) == want {
 			r.Result = ResultPass

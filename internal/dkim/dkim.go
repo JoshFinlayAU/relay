@@ -24,13 +24,20 @@ type KeyPair struct {
 	Algorithm  string // "rsa"
 }
 
+// DefaultSelectorPrefix starts a selector when no prefix is configured.
+const DefaultSelectorPrefix = "rly"
+
 // Selector returns a year-stamped selector, e.g. rly2026a, to make rotation
-// sane (a second key in the same year would be rly2026b, etc.).
-func Selector(year int, suffix string) string {
+// sane (a second key in the same year would be rly2026b, etc.). An empty
+// prefix means DefaultSelectorPrefix.
+func Selector(prefix string, year int, suffix string) string {
+	if prefix == "" {
+		prefix = DefaultSelectorPrefix
+	}
 	if suffix == "" {
 		suffix = "a"
 	}
-	return fmt.Sprintf("rly%d%s", year, suffix)
+	return fmt.Sprintf("%s%d%s", prefix, year, suffix)
 }
 
 // Generate creates an RSA-2048 DKIM keypair for the given selector.

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -42,6 +43,16 @@ func TestValidate(t *testing.T) {
 		{"no http", func(c *Config) { c.HTTPAddr = "" }, true},
 		{"bad maxconns", func(c *Config) { c.MaxConns = 0 }, true},
 		{"bad loglevel", func(c *Config) { c.LogLevel = "loud" }, true},
+		{"dns names", func(c *Config) {
+			c.VerifyRecord, c.VerifyValuePrefix, c.DKIMSelectorPrefix = "_mail-verify", "mail-verify", "mx"
+		}, false},
+		{"verify record with a dot", func(c *Config) { c.VerifyRecord = "_v.mail" }, true},
+		{"verify record ends in hyphen", func(c *Config) { c.VerifyRecord = "_mail-" }, true},
+		{"verify prefix with =", func(c *Config) { c.VerifyValuePrefix = "mail=verify" }, true},
+		{"verify prefix with space", func(c *Config) { c.VerifyValuePrefix = "mail verify" }, true},
+		{"selector prefix uppercase", func(c *Config) { c.DKIMSelectorPrefix = "MX" }, true},
+		{"selector prefix starts with digit", func(c *Config) { c.DKIMSelectorPrefix = "2mx" }, true},
+		{"selector prefix too long", func(c *Config) { c.DKIMSelectorPrefix = "m" + strings.Repeat("x", 50) }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -61,6 +72,9 @@ func TestApplyEnv(t *testing.T) {
 	t.Setenv("RELAY_AUTO_MIGRATE", "false")
 	t.Setenv("RELAY_ADMIN_TOKENS", "a, b ,c")
 	t.Setenv("RELAY_DNS_REVERIFY_INTERVAL", "2h")
+	t.Setenv("RELAY_VERIFY_RECORD", "_mail-verify")
+	t.Setenv("RELAY_VERIFY_VALUE_PREFIX", "mail-verify")
+	t.Setenv("RELAY_DKIM_SELECTOR_PREFIX", "mx")
 
 	c := Default()
 	c.applyEnv()
@@ -79,5 +93,8 @@ func TestApplyEnv(t *testing.T) {
 	}
 	if c.DNSReverifyInterval != 2*time.Hour {
 		t.Errorf("reverify=%v", c.DNSReverifyInterval)
+	}
+	if c.VerifyRecord != "_mail-verify" || c.VerifyValuePrefix != "mail-verify" || c.DKIMSelectorPrefix != "mx" {
+		t.Errorf("dns names = %q %q %q", c.VerifyRecord, c.VerifyValuePrefix, c.DKIMSelectorPrefix)
 	}
 }

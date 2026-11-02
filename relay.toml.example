@@ -43,6 +43,17 @@ auto_migrate = true          # apply pending migrations on boot
 # sending_ipv4 = "203.0.113.10"
 # sending_ipv6 = "2001:db8::10"
 
+# ── Names in customers' DNS (white label) ────────────────────────────────────
+# Every hosted domain publishes an ownership TXT record and a DKIM selector.
+# By default they carry this product's name: "_relay-verify.<domain>" with
+# "relay-verify=<token>", and selectors like "rly2026a". Set these to keep the
+# name out of your customers' DNS. Set them before onboarding domains: after a
+# change, existing domains must publish the new ownership record or the
+# reverifier marks them degraded. Existing DKIM keys keep their selectors.
+# verify_record        = "_mail-verify"   # one DNS label
+# verify_value_prefix  = "mail-verify"    # TXT value is "<prefix>=<token>"
+# dkim_selector_prefix = "mx"             # selectors become "mx2026a"
+
 # ── Secrets ──────────────────────────────────────────────────────────────────
 # 32-byte base64 key for AES-256-GCM at-rest encryption (DKIM keys, webhook
 # secrets). Generate: head -c32 /dev/urandom | base64

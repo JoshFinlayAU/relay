@@ -70,6 +70,18 @@ no public IP is found, **Settings → Server DNS** shows a warning rather than
 emitting wrong records. Note IPv6 auto/echo detection may return a temporary
 (privacy/SLAAC) address - pin `sending_ipv6` to the address your PTR points at.
 
+### Names in customers' DNS (white label)
+
+Every hosted domain publishes an ownership TXT record and a DKIM key. By default
+their names carry this product's name: `_relay-verify.<domain>` with
+`relay-verify=<token>`, and selectors like `rly2026a`. A white-label operator can
+change them with `verify_record`, `verify_value_prefix` and
+`dkim_selector_prefix` in `relay.toml` (or `RELAY_VERIFY_RECORD`,
+`RELAY_VERIFY_VALUE_PREFIX`, `RELAY_DKIM_SELECTOR_PREFIX`). Set them before
+onboarding domains: after a change, existing domains must publish the new
+ownership record or the reverifier marks them degraded. Existing DKIM keys keep
+their selectors.
+
 ### Manual (dev)
 
 ```bash

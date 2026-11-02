@@ -62,6 +62,12 @@ func lockTestDB(st *store.Store) func() {
 // newTestServer returns an httptest server with a clean database.
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	return newTestServerWith(t, func(*dns.Params) {})
+}
+
+// newTestServerWith is newTestServer with the DNS params adjusted first.
+func newTestServerWith(t *testing.T, adjust func(*dns.Params)) *httptest.Server {
+	t.Helper()
 	// Clean slate; CASCADE clears dependent rows.
 	_, err := testStore.Pool.Exec(context.Background(),
 		`TRUNCATE domains, credentials, mailboxes, messages, events, admin_users, admin_sessions RESTART IDENTITY CASCADE`)
@@ -79,6 +85,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		SPFInclude: "spf.mail.as135559.net.au",
 		DMARCRua:   "mailto:dmarc@as135559.net.au",
 	}
+	adjust(&params)
 	blobs, err := storage.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

@@ -36,16 +36,39 @@ type Params struct {
 	Hostname   string // server FQDN, used as MX target and EHLO name
 	SPFInclude string // include: target for customer SPF
 	DMARCRua   string // DMARC rua mailto
+
+	// Names customers publish in their own DNS. Empty ⇒ the built-in defaults,
+	// so a white-label deployment can keep the product name out of them.
+	VerifyRecord       string // ownership TXT label under the domain
+	VerifyValuePrefix  string // ownership TXT value is "<prefix>=<token>"
+	DKIMSelectorPrefix string // new DKIM keys get "<prefix><year><suffix>"
 }
+
+// Built-in ownership record naming, used when Params leaves a name empty.
+const (
+	DefaultVerifyRecord      = "_relay-verify"
+	DefaultVerifyValuePrefix = "relay-verify"
+)
 
 // BounceSubdomain returns the bounce subdomain for a domain.
 func BounceSubdomain(domain string) string { return "bounce." + domain }
 
 // OwnershipName returns the ownership-verification record name.
-func OwnershipName(domain string) string { return "_relay-verify." + domain }
+func (p Params) OwnershipName(domain string) string {
+	return orDefault(p.VerifyRecord, DefaultVerifyRecord) + "." + domain
+}
 
 // OwnershipValue returns the ownership TXT value for a token.
-func OwnershipValue(token string) string { return "relay-verify=" + token }
+func (p Params) OwnershipValue(token string) string {
+	return orDefault(p.VerifyValuePrefix, DefaultVerifyValuePrefix) + "=" + token
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
 
 // DKIMName returns the DKIM record name for a selector.
 func DKIMName(selector, domain string) string {
@@ -58,8 +81,8 @@ func PlanRecords(domain, token, selector, dkimPublicB64 string, receiving bool, 
 		{
 			Purpose:  PurposeOwnership,
 			Type:     "TXT",
-			Name:     OwnershipName(domain),
-			Value:    OwnershipValue(token),
+			Name:     p.OwnershipName(domain),
+			Value:    p.OwnershipValue(token),
 			Required: true,
 		},
 		{

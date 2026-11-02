@@ -8,10 +8,13 @@ import (
 )
 
 func TestSelector(t *testing.T) {
-	if got := Selector(2026, ""); got != "rly2026a" {
+	if got := Selector("", 2026, ""); got != "rly2026a" {
 		t.Errorf("Selector = %q", got)
 	}
-	if got := Selector(2026, "b"); got != "rly2026b" {
+	if got := Selector("", 2026, "b"); got != "rly2026b" {
+		t.Errorf("Selector = %q", got)
+	}
+	if got := Selector("mx", 2026, "a"); got != "mx2026a" {
 		t.Errorf("Selector = %q", got)
 	}
 }

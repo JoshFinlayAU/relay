@@ -58,6 +58,10 @@ Returns the domain plus **every DNS record to publish** (`dns[]`), each with a
 
 Set `"receiving":true` to also get the inbound `MX` record for the apex.
 
+The ownership record and the DKIM selector use the server's configured names
+(`verify_record`, `verify_value_prefix`, `dkim_selector_prefix`); the example
+shows the defaults. Always publish the names the API returns.
+
 Re-fetch the records (with live per-record check status) any time:
 
 ```bash
