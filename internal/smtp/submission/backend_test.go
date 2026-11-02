@@ -232,6 +232,49 @@ func TestSubmitSignAndQueue(t *testing.T) {
 	}
 }
 
+// TestReceivedHeaderNamesOnlyTheHost: our Received header is signed and
+// delivered, so an operator reselling mail under its own brand must not find
+// this product's name in it. The configured hostname is the only server name.
+func TestReceivedHeaderNamesOnlyTheHost(t *testing.T) {
+	h := setup(t)
+	defer h.cleanup()
+	c := dialAuthed(t, h, true)
+	defer func() { _ = c.Quit() }()
+
+	from := "app@" + h.domain
+	if err := send(t, c, from, "dest@example.net", testMessage(from)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	var bodyRef string
+	if err := testStore.Pool.QueryRow(context.Background(),
+		`SELECT body_ref FROM messages WHERE direction='outbound' LIMIT 1`).Scan(&bodyRef); err != nil {
+		t.Fatalf("no message row: %v", err)
+	}
+	signed, err := h.blobs.Get(bodyRef)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+
+	var received []string
+	for _, line := range strings.Split(string(signed), "\r\n") {
+		if line == "" {
+			break // end of the header section
+		}
+		if strings.HasPrefix(strings.ToLower(line), "received:") {
+			received = append(received, line)
+		}
+	}
+	if len(received) != 1 {
+		t.Fatalf("want exactly our Received header, got %q", received)
+	}
+	if !strings.Contains(received[0], " by "+testHost+" with ESMTPA id ") {
+		t.Errorf("Received does not name the configured host as the server: %q", received[0])
+	}
+	if rest := strings.ReplaceAll(received[0], testHost, ""); strings.Contains(strings.ToLower(rest), "relay") {
+		t.Errorf("Received names relay outside the configured hostname: %q", received[0])
+	}
+}
+
 func TestWrongDomainFromRejected(t *testing.T) {
 	h := setup(t)
 	defer h.cleanup()

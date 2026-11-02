@@ -284,7 +284,10 @@ func (s *session) coveredDomain(name string) (*store.Domain, error) {
 // receivedHeader builds our Received header. It deliberately does NOT include
 // the submitting app's IP (CLAUDE.md: never leak internal app IPs); the client
 // is identified by its authenticated EHLO name. A single recipient is recorded
-// in a "for" clause per RFC 5321.
+// in a "for" clause per RFC 5321. It names no product either: the header is
+// signed and delivered, so an operator reselling mail under its own brand would
+// otherwise show this product's name in every message its customers receive.
+// The configured hostname is the only server name in it.
 func (s *session) receivedHeader(msgID uuid.UUID) string {
 	ehlo := sanitizeHeader(s.conn.Hostname())
 	if ehlo == "" {
@@ -294,7 +297,7 @@ func (s *session) receivedHeader(msgID uuid.UUID) string {
 	if len(s.rcpts) == 1 {
 		forClause = " for <" + sanitizeHeader(s.rcpts[0]) + ">"
 	}
-	return fmt.Sprintf("from %s (authenticated) by %s (Relay) with ESMTPA id %s%s; %s",
+	return fmt.Sprintf("from %s (authenticated) by %s with ESMTPA id %s%s; %s",
 		ehlo, s.deps.Hostname, msgID, forClause, time.Now().UTC().Format(time.RFC1123Z))
 }
 
